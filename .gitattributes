@@ -1,0 +1,56 @@
+# Auto detect
+*       text=auto
+
+# Archives
+*.7z    binary
+*.zip   binary
+
+# Audio
+*.m4a   binary
+*.mp3   binary
+*.ogg   binary
+
+# Executables and Libraries
+*.a     binary
+*.app   binary
+*.dll   binary
+*.dylib binary
+*.exe   binary
+*.lib   binary
+*.obj   binary
+*.out   binary
+*.so    binary
+
+# Fonts
+*.woff2 binary
+
+# Graphics
+*.ai    binary
+*.avif  binary
+*.eps   binary
+*.ico   binary
+*.jpeg  binary
+*.jpg   binary
+*.png   binary
+*.psd   binary
+*.webp  binary
+
+# Sources
+*.cmd   text eol=crlf
+*.lock  text -diff
+*.map   text -diff
+*.ps1   text eol=crlf
+*.sh    text eol=lf
+
+# Configs
+go.mod            text eol=lf
+go.sum            text eol=lf
+package-lock.json text eol=lf -diff
+package.json      text eol=lf
+
+# Video
+*.mkv   binary
+*.mov   binary
+*.mp4   binary
+*.ogv   binary
+*.webm  binary
