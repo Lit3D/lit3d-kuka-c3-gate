@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 )
@@ -91,6 +92,16 @@ func (p *E6AXIS) Value() string {
   return fmt.Sprintf("{E6AXIS: A1 %.5f, A2 %.5f, A3 %.5f, A4 %.5f, A5 %.5f, A6 %.5f}", p.A1, p.A2, p.A3, p.A4, p.A5, p.A6)
 }
 
+func (p *E6AXIS) Equal(x *E6AXIS, tolerance float32) bool {
+  return math.Abs(float64(p.A1-x.A1)) <= float64(tolerance) &&
+         math.Abs(float64(p.A2-x.A2)) <= float64(tolerance) &&
+         math.Abs(float64(p.A3-x.A3)) <= float64(tolerance) &&
+         math.Abs(float64(p.A4-x.A4)) <= float64(tolerance) &&
+         math.Abs(float64(p.A5-x.A5)) <= float64(tolerance) &&
+         math.Abs(float64(p.A6-x.A6)) <= float64(tolerance)
+}
+
+
 type E6POS struct {
   Id uint8
 
@@ -174,3 +185,13 @@ func (p *E6POS) Parse(value string) error {
 func (p *E6POS) Value() string {
   return fmt.Sprintf("{E6POS: X %.5f, Y %.5f, Z %.5f, A %.5f, B %.5f, C %.5f}", p.X, p.Y, p.Z, p.A, p.B, p.C)
 }
+
+func (p *E6POS) Equal(x *E6POS, tolerance float32) bool {
+  return math.Abs(float64(p.X-x.X)) <= float64(tolerance) &&
+         math.Abs(float64(p.Y-x.Y)) <= float64(tolerance) &&
+         math.Abs(float64(p.Z-x.Z)) <= float64(tolerance) &&
+         math.Abs(float64(p.A-x.A)) <= float64(tolerance) &&
+         math.Abs(float64(p.B-x.B)) <= float64(tolerance) &&
+         math.Abs(float64(p.C-x.C)) <= float64(tolerance)
+}
+

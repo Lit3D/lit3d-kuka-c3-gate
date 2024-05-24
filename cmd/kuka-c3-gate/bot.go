@@ -199,7 +199,7 @@ func (bot *Bot) findE6POSPosition(id uint8) *E6POS {
   return nil
 }
 
-func (bot *Bot) oscResponseCallback(index int32, position int32) {
+func (bot *Bot) oscE6AXISResponseCallback(index int32, position int32, positionE6AXIS *E6AXIS) {
   oscResponsePacket := &OSCOutputResponsePacket{
     Path: bot.ResponsePath,
     Index: index,
@@ -207,11 +207,48 @@ func (bot *Bot) oscResponseCallback(index int32, position int32) {
     Status: OSCOutputStatus_OK,
   }
 
+  var stopPoint = 0
+  for {
+    if bot.E6AXIS.Equal(positionE6AXIS, 0.0100) {
+      stopPoint += 1
+    }
+
+    if stopPoint >= 3 {
+      break
+    }
+  }
+
   if DEBUG {
     log.Printf("[BOT DEBUG] Command response: %+v\n", oscResponsePacket)
   }
 
-  //bot.oscClient.Send(oscResponsePacket)
+  bot.oscClient.Send(oscResponsePacket)
+}
+
+func (bot *Bot) oscE6POSResponseCallback(index int32, position int32, positionE6POS *E6POS) {
+  oscResponsePacket := &OSCOutputResponsePacket{
+    Path: bot.ResponsePath,
+    Index: index,
+    Position: position,
+    Status: OSCOutputStatus_OK,
+  }
+
+  var stopPoint = 0
+  for {
+    if bot.E6POS.Equal(positionE6POS, 0.0100) {
+      stopPoint += 1
+    }
+
+    if stopPoint >= 3 {
+      break
+    }
+  }
+
+  if DEBUG {
+    log.Printf("[BOT DEBUG] Command response: %+v\n", oscResponsePacket)
+  }
+
+  bot.oscClient.Send(oscResponsePacket)
 }
 
 func (bot *Bot) oscErrorResponse(index int32, position int32) {
@@ -249,7 +286,7 @@ func (bot *Bot) processCommands() {
       }
 
       bot.c3Client.Request(requestVariable)
-      go bot.oscResponseCallback(comand.Index, comand.Position)
+      go bot.oscE6AXISResponseCallback(comand.Index, comand.Position, positionE6AXIS)
       continue
     }
 
@@ -269,7 +306,7 @@ func (bot *Bot) processCommands() {
       }
 
       bot.c3Client.Request(requestVariable)
-      go bot.oscResponseCallback(comand.Index, comand.Position)
+      go bot.oscE6POSResponseCallback(comand.Index, comand.Position, positionE6POS)
       continue
     }
 
