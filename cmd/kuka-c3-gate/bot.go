@@ -53,6 +53,9 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   bot.E6AXIS = &E6AXIS{}
   bot.E6POS  = &E6POS{}
 
+  bot.COM_E6AXIS = &E6AXIS{}
+  bot.COM_E6POS = &E6POS{}
+
   if bot.c3Client, err = NewC3Client(bot.Address); err != nil {
     return fmt.Errorf("C3Client creation error: %w", err)
   }
