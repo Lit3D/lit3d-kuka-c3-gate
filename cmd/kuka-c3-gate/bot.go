@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type Bot struct {
@@ -18,6 +19,10 @@ type Bot struct {
   ResponsePath    string `json:"responsePath"`
   PositionPath    string `json:"positionPath"`
 
+  UpdateInterval uint16 `json:"updateInterval"`
+
+  SafeZone *SafeZone `json:"safeZone"`
+
   PositionsE6AXIS []E6AXIS `json:"positionsE6AXIS"`
   PositionsE6POS  []E6POS  `json:"positionsE6POS"`
 
@@ -30,6 +35,8 @@ type Bot struct {
   c3Client  *C3Client
   oscClient *OSCClient
 
+  isShutdown chan struct{}
+  
   wg sync.WaitGroup
   UI *UI
 
@@ -53,6 +60,8 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
 
   bot.comands = oscServer.CommandsSubscribe(bot.CommandPath)
   bot.coords = oscServer.CoordsSubscribe(bot.CoordsPath)
+  
+  bot.isShutdown = make(chan struct{})
 
   bot.wg.Add(1)
   go bot.processVariable()
@@ -70,6 +79,9 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_ADDRESS"] = nil
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
+
+  bot.wg.Add(1)
+  go bot.updateStateLoop()
 
   bot.updateUI()
   return nil
@@ -95,6 +107,29 @@ func (bot *Bot) UILines() []string {
     lines = append(lines, fmt.Sprintf(" %d: %s", position.Id, position.Value()))
   }
   return lines
+}
+
+func (bot *Bot) updateStateLoop() {
+  defer bot.wg.Done()
+  
+  ticker := time.NewTicker(time.Duration(bot.UpdateInterval) * time.Microsecond)
+
+  requestVariable := make(map[string]*string)
+  requestVariable["@PROXY_TYPE"] = nil
+  requestVariable["@PROXY_VERSION"] = nil
+  requestVariable["@PROXY_HOSTNAME"] = nil
+  requestVariable["@PROXY_ADDRESS"] = nil
+  requestVariable["@PROXY_PORT"] = nil
+
+  for {
+    select {
+      case <-ticker.C:
+        bot.c3Client.Request(requestVariable)
+      case <-bot.isShutdown:
+        ticker.Stop()
+        return
+    }
+  }
 }
 
 func (bot *Bot) processVariable() {
@@ -139,6 +174,7 @@ func (bot *Bot) processVariable() {
 func (bot *Bot) processCommands() {
   defer bot.wg.Done()
   for comand := range bot.comands {
+    bot.nextPosition = int(comand.Position)
     log.Printf("BOT Command: %+v\n", comand)
   }
 }
@@ -151,6 +187,7 @@ func (bot *Bot) processCoords() {
 }
 
 func (bot *Bot) Shutdown() {
+  close(bot.isShutdown)
   bot.oscClient.Shutdown()
   bot.c3Client.Shutdown()
   bot.wg.Wait()
