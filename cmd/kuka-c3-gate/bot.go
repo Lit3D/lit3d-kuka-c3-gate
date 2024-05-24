@@ -40,7 +40,7 @@ type Bot struct {
   wg sync.WaitGroup
 
   COM_ACTION int
-  COM_ROUNDM int
+  COM_ROUNDM float32
 
   currentPosition int
   nextPosition int
@@ -149,11 +149,11 @@ func (bot *Bot) processVariable() {
         bot.COM_ACTION = int(intValue)
 
       case "COM_ROUNDM":
-        intValue, err := strconv.ParseInt(variable.Value, 10, 8)
+        floatValue, err := strconv.ParseFloat(variable.Value, 32)
         if err != nil {
           log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v", variable.Name, variable.Value, err)
         }
-        bot.COM_ROUNDM = int(intValue)
+        bot.COM_ROUNDM = float32(floatValue)
 
       case "@PROXY_TYPE", "@PROXY_VERSION", "@PROXY_HOSTNAME", "@PROXY_TIME", "@PROXY_ADDRESS", "@PROXY_PORT", "@PROXY_ENABLED":
         log.Printf("[BOT INFO] %s = %s\n", variable.Name, variable.Value)
@@ -166,7 +166,7 @@ func (bot *Bot) processVariable() {
     }
 
     if DEBUG {
-      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %d\n;",
+      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %.5f\n;",
         bot.Name,
         bot.Address,
         bot.E6AXIS.Value(),
