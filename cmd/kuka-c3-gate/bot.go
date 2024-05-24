@@ -80,8 +80,14 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
 
-  bot.wg.Add(1)
-  go bot.updateStateLoop()
+  // requestVariable = make(map[string]*string)
+  // requestVariable["$AXIS_ACT"] = nil
+  // requestVariable["$POS_ACT"] = nil
+  // requestVariable["COM_ACTION"] = nil
+  // bot.c3Client.Request(requestVariable)
+
+  // bot.wg.Add(1)
+  // go bot.updateStateLoop()
 
   bot.updateUI()
   return nil
@@ -115,11 +121,9 @@ func (bot *Bot) updateStateLoop() {
   ticker := time.NewTicker(time.Duration(bot.UpdateInterval) * time.Microsecond)
 
   requestVariable := make(map[string]*string)
-  requestVariable["@PROXY_TYPE"] = nil
-  requestVariable["@PROXY_VERSION"] = nil
-  requestVariable["@PROXY_HOSTNAME"] = nil
-  requestVariable["@PROXY_ADDRESS"] = nil
-  requestVariable["@PROXY_PORT"] = nil
+  requestVariable["$AXIS_ACT"] = nil
+  requestVariable["$POS_ACT"] = nil
+  requestVariable["COM_ACTION"] = nil
 
   for {
     select {
