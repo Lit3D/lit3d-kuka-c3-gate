@@ -226,6 +226,8 @@ func (bot *Bot) oscE6AXISResponseCallback(index int32, position int32, positionE
     if stopPoint >= 3 {
       break
     }
+
+    time.Sleep(15 * time.Millisecond)
   }
 
   if DEBUG {
