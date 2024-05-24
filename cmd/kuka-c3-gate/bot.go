@@ -126,6 +126,7 @@ func (bot *Bot) processVariable() {
         if err := bot.E6AXIS.Parse(variable.Value); err != nil {
           log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
         }
+        bot.oscE6AXISsendCords()
 
       case "COM_E6AXIS":
         if err := bot.COM_E6AXIS.Parse(variable.Value); err != nil {
@@ -179,6 +180,15 @@ func (bot *Bot) processVariable() {
       )
     }
   }
+}
+
+func (bot *Bot) oscE6AXISsendCords() {
+  position := bot.E6AXIS
+  oscPositionPacket := &OSCOutputPositionPacket {
+    Path: bot.CoordsPath,
+    Positions: [6]float32{position.A1, position.A2, position.A3, position.A4, position.A5, position.A6},
+  }
+  bot.oscClient.Send(oscPositionPacket)
 }
 
 func (bot *Bot) findE6AXISPosition(id uint8) *E6AXIS {
