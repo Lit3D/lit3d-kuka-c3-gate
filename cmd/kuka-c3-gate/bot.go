@@ -286,13 +286,13 @@ func (bot *Bot) processCommands() {
       requestVariable := make(map[string]*string)
       positionValue := positionE6AXIS.Value()
       requestVariable["COM_E6AXIS"] = &positionValue
+      comRoundValue := "-1"
+      requestVariable["COM_ROUNDM"] = &comRoundValue
       bot.c3Client.Request(requestVariable)
 
       requestVariable = make(map[string]*string)
       comActionValue := "2"
       requestVariable["COM_ACTION"] = &comActionValue
-      comRoundValue := "-1"
-      requestVariable["COM_ROUNDM"] = &comRoundValue
       bot.c3Client.Request(requestVariable)
 
       log.Printf("[BOT INFO] Move bot to position: %+v\n", positionValue)
