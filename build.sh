@@ -4,7 +4,7 @@ cd -P -- "$(dirname -- "$0")"
 VERSION=$(git tag -l --points-at HEAD)
 if [ -z "$VERSION" ]
 then
-  VERSION="$(git rev-parse --short HEAD)-$(date -u '+%Y.%m.%d-%H:%M:%S')"
+  VERSION="$(git rev-parse --short HEAD)-$(date -u '+%Y%m%d-%H%M%S')"
 else
   VERSION="v${VERSION}"
 fi
