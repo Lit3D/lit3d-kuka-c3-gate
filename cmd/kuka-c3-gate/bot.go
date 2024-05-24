@@ -144,6 +144,8 @@ func (bot *Bot) processVariable() {
       continue
     }
 
+    log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
+
     switch variable.Name {
       case "$AXIS_ACT":
         if err := bot.E6AXIS.Parse(variable.Value); err != nil {
