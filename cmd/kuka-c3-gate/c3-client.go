@@ -213,6 +213,9 @@ func (c3 *C3Client) processMessage() {
     }
 
     if err := msg.Error(); err != nil {
+      if DEBUG {
+        log.Printf("[C3Client DEBUG] %+v\n", packet)
+      }
       log.Printf("[C3Client ERROR] Response packet error: %v\n", err)
       continue
     }
