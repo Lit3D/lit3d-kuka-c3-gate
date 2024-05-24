@@ -144,11 +144,7 @@ func (bot *Bot) processVariable() {
       continue
     }
 
-<<<<<<< HEAD
     log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
-=======
-    // log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
->>>>>>> f986109 (test with kuka)
 
     switch variable.Name {
       case "$AXIS_ACT":
