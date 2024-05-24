@@ -1,10 +1,10 @@
 [
   {
     "name": "Bot_L",
-    "address": "10.211.55.3:7000",
+    "address": "192.168.0.101:7000",
     "updateInterval": 100,
     "commandPath": "/pos_L",
-    "responseAddress": "10.211.55.3:8110",
+    "responseAddress": "10.211.55.5:8110",
     "responsePath": "/res_L",
     "positionPath": "/rot_L",
     "positionsE6AXIS": [
