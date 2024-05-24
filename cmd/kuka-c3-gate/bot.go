@@ -29,6 +29,9 @@ type Bot struct {
   E6AXIS *E6AXIS
   E6POS  *E6POS
 
+  COM_E6AXIS *E6AXIS
+  COM_E6POS *E6POS
+
   comands chan *OSCCommandInputPacket
   coords  chan *OSCCoordsInputPacket
 
@@ -136,8 +139,18 @@ func (bot *Bot) processVariable() {
           log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
         }
 
+      case "COM_E6AXIS":
+        if err := bot.COM_E6AXIS.Parse(variable.Value); err != nil {
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
+        }
+
       case "$POS_ACT":
         if err := bot.E6POS.Parse(variable.Value); err != nil {
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
+        }
+
+      case "COM_E6POS":
+        if err := bot.COM_E6POS.Parse(variable.Value); err != nil {
           log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
         }
 
@@ -166,13 +179,15 @@ func (bot *Bot) processVariable() {
     }
 
     if DEBUG {
-      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %.5f\n;",
+      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %.5f\nCOM_E6AXIS: %s\nCOM_E6POS: %s\n",
         bot.Name,
         bot.Address,
         bot.E6AXIS.Value(),
         bot.E6POS.Value(),
         bot.COM_ACTION,
         bot.COM_ROUNDM,
+        bot.COM_E6AXIS.Value(),
+        bot.COM_E6POS.Value(),
       )
     }
   }
