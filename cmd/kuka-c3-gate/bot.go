@@ -185,7 +185,7 @@ func (bot *Bot) processVariable() {
 func (bot *Bot) oscE6AXISsendCords() {
   position := bot.E6AXIS
   oscPositionPacket := &OSCOutputPositionPacket {
-    Path: bot.CoordsPath,
+    Path: bot.PositionPath,
     Positions: [6]float32{position.A1, position.A2, position.A3, position.A4, position.A5, position.A6},
   }
   bot.oscClient.Send(oscPositionPacket)
