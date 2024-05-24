@@ -79,14 +79,14 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
 
-  requestVariable = make(map[string]*string)
-  requestVariable["$AXIS_ACT"] = nil
-  requestVariable["$POS_ACT"] = nil
-  requestVariable["COM_ACTION"] = nil
-  bot.c3Client.Request(requestVariable)
+  // requestVariable = make(map[string]*string)
+  // requestVariable["$AXIS_ACT"] = nil
+  // requestVariable["$POS_ACT"] = nil
+  // requestVariable["COM_ACTION"] = nil
+  // bot.c3Client.Request(requestVariable)
 
-  // bot.wg.Add(1)
-  // go bot.updateStateLoop()
+  bot.wg.Add(1)
+  go bot.updateStateLoop()
   return nil
 }
 

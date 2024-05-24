@@ -2,7 +2,7 @@
   {
     "name": "Bot_L",
     "address": "192.168.0.101:7000",
-    "updateInterval": 100,
+    "updateInterval": 500,
     "commandPath": "/pos_L",
     "responseAddress": "10.211.55.5:8110",
     "responsePath": "/res_L",
