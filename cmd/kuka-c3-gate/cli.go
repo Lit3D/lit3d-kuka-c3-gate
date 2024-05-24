@@ -28,7 +28,7 @@ func (i *PortValue) Set(s string) error {
   return nil
 }
 
-func cli() (initConfig int, verboseOutput bool, oscPort PortValue, botsCofig string) {
+func cli() (initConfig int, verboseOutput bool, debugOutput bool, oscPort PortValue, botsCofig string) {
   var printHelp bool
   var printVersion bool
   flag.BoolVar(&printHelp, "help", false, "Print help and usage information")
@@ -36,10 +36,8 @@ func cli() (initConfig int, verboseOutput bool, oscPort PortValue, botsCofig str
 
   flag.IntVar(&initConfig, "i", 0, "Init new config with bots count")
   flag.BoolVar(&verboseOutput, "v", false, "Show verbose log output")
+  flag.BoolVar(&debugOutput, "d", false, "Show debug log output")
   
-  var isUIMode bool
-  flag.BoolVar(&isUIMode, "ui", false, "Show user interface")
-
   oscPort = defaultOSCPort
   flag.Var(&oscPort, "osc", "OSC listening port")
   

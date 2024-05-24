@@ -40,6 +40,7 @@ type Bot struct {
   wg sync.WaitGroup
 
   COM_ACTION int
+  COM_ROUNDM int
 
   currentPosition int
   nextPosition int
@@ -79,11 +80,26 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
 
-  // requestVariable = make(map[string]*string)
-  // requestVariable["$AXIS_ACT"] = nil
-  // requestVariable["$POS_ACT"] = nil
-  // requestVariable["COM_ACTION"] = nil
-  // bot.c3Client.Request(requestVariable)
+  requestVariable = make(map[string]*string)
+  requestVariable["$VEL_ACT"] = nil
+  requestVariable["$ACC_ACT"] = nil
+  requestVariable["$TOOL"] = nil
+  requestVariable["$BASE"] = nil
+  requestVariable["$IPO_MODE"] = nil
+  bot.c3Client.Request(requestVariable)
+
+  requestVariable = make(map[string]*string)
+  requestVariable["$AXIS_HOME"] = nil
+  requestVariable["$AXIS_LIMITS"] = nil
+  requestVariable["$ADVANCE"] = nil
+  bot.c3Client.Request(requestVariable)
+
+  requestVariable = make(map[string]*string)
+  requestVariable["$ROBOT_STATUS"] = nil
+  requestVariable["$ERROR"] = nil
+  requestVariable["$IN_HOME"] = nil
+  requestVariable["$TIMER"] = nil
+  bot.c3Client.Request(requestVariable)
 
   bot.wg.Add(1)
   go bot.updateStateLoop()
@@ -114,6 +130,7 @@ func (bot *Bot) updateStateLoop() {
   requestVariable["$AXIS_ACT"] = nil
   requestVariable["$POS_ACT"] = nil
   requestVariable["COM_ACTION"] = nil
+  requestVariable["COM_ROUNDM"] = nil
 
   for {
     select {
@@ -152,6 +169,13 @@ func (bot *Bot) processVariable() {
         }
         bot.COM_ACTION = int(intValue)
 
+      case "COM_ROUNDM":
+        intValue, err := strconv.ParseUint(variable.Value, 10, 8)
+        if err != nil {
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v", variable.Name, variable.Value, err)
+        }
+        bot.COM_ROUNDM = int(intValue)
+
       case "@PROXY_TYPE", "@PROXY_VERSION", "@PROXY_HOSTNAME", "@PROXY_TIME", "@PROXY_ADDRESS", "@PROXY_PORT", "@PROXY_ENABLED":
         log.Printf("[BOT INFO] %s = %s\n", variable.Name, variable.Value)
 
@@ -162,7 +186,16 @@ func (bot *Bot) processVariable() {
         log.Printf("[BOT WARNING] Unsupported variable %s with value %s\n", variable.Name, variable.Value)
     }
 
-    log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d\n", bot.Name, bot.Address, bot.E6AXIS.Value(), bot.E6POS.Value(), bot.COM_ACTION)
+    if DEBUG {
+      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %d\n;",
+        bot.Name,
+        bot.Address,
+        bot.E6AXIS.Value(),
+        bot.E6POS.Value(),
+        bot.COM_ACTION,
+        bot.COM_ROUNDM,
+      )
+    }
   }
 }
 

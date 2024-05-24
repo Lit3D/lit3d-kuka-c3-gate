@@ -19,10 +19,13 @@ var (
   
   tempDir  = os.TempDir()
   logPath  = filepath.Join(tempDir, execName + ".log")
+
+  DEBUG = false
 )
 
 func main() {
-  initConfig, verboseOutput, oscPort, botsCofig := cli()
+  initConfig, verboseOutput, debugOutput, oscPort, botsCofig := cli()
+  DEBUG = debugOutput
 
   if initConfig > 0 {
     if err := initBotsConfig(botsCofig, initConfig); err != nil {
