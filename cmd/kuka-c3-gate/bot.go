@@ -217,6 +217,8 @@ func (bot *Bot) oscE6AXISResponseCallback(index int32, position int32, positionE
     Status: OSCOutputStatus_OK,
   }
 
+  log.Printf("[BOT INFO] Wait position: %s\n", positionE6AXIS.Value())
+
   var stopPoint = 0
   for {
     if bot.E6AXIS.Equal(positionE6AXIS, 0.0100) {
@@ -230,10 +232,7 @@ func (bot *Bot) oscE6AXISResponseCallback(index int32, position int32, positionE
     time.Sleep(15 * time.Millisecond)
   }
 
-  if DEBUG {
-    log.Printf("[BOT DEBUG] Command response: %+v\n", oscResponsePacket)
-  }
-
+  log.Printf("[BOT INFO] Command response: %+v\n", oscResponsePacket)
   bot.oscClient.Send(oscResponsePacket)
 }
 
@@ -245,6 +244,8 @@ func (bot *Bot) oscE6POSResponseCallback(index int32, position int32, positionE6
     Status: OSCOutputStatus_OK,
   }
 
+  log.Printf("[BOT INFO] Wait position: %s\n", positionE6POS.Value())
+
   var stopPoint = 0
   for {
     if bot.E6POS.Equal(positionE6POS, 0.0100) {
@@ -255,11 +256,8 @@ func (bot *Bot) oscE6POSResponseCallback(index int32, position int32, positionE6
       break
     }
   }
-
-  if DEBUG {
-    log.Printf("[BOT DEBUG] Command response: %+v\n", oscResponsePacket)
-  }
-
+  
+  log.Printf("[BOT INFO] Command response: %+v\n", oscResponsePacket)
   bot.oscClient.Send(oscResponsePacket)
 }
 
@@ -306,13 +304,16 @@ func (bot *Bot) processCommands() {
       requestVariable := make(map[string]*string)
       positionValue := positionE6POS.Value()
       requestVariable["COM_E6POS"] = &positionValue
-      comActionValue := "3"
-      requestVariable["COM_ACTION"] = &comActionValue
       comRoundValue := "-1"
       requestVariable["COM_ROUNDM"] = &comRoundValue
-
-      log.Printf("[BOT INFO] Move bot to position: %+v\n", positionValue)
       bot.c3Client.Request(requestVariable)
+
+      requestVariable = make(map[string]*string)
+      comActionValue := "3"
+      requestVariable["COM_ACTION"] = &comActionValue
+      bot.c3Client.Request(requestVariable)
+      
+      log.Printf("[BOT INFO] Move bot to position: %+v\n", positionValue)
       go bot.oscE6POSResponseCallback(comand.Index, comand.Position, positionE6POS)
       continue
     }
