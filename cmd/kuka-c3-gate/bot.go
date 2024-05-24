@@ -144,23 +144,27 @@ func (bot *Bot) processVariable() {
       continue
     }
 
+<<<<<<< HEAD
     log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
+=======
+    // log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
+>>>>>>> f986109 (test with kuka)
 
     switch variable.Name {
       case "$AXIS_ACT":
         if err := bot.E6AXIS.Parse(variable.Value); err != nil {
-          log.Printf("[BOT ERROR] Variable %s parse error: %v\n", variable.Name, err)
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
         }
 
       case "$POS_ACT":
         if err := bot.E6POS.Parse(variable.Value); err != nil {
-          log.Printf("[BOT ERROR] Variable %s parse error: %v\n", variable.Name, err)
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v\n", variable.Name, variable.Value, err)
         }
 
       case "COM_ACTION":
         intValue, err := strconv.ParseUint(variable.Value, 10, 8)
         if err != nil {
-          log.Printf("[BOT ERROR] Variable %s parse error: %v", variable.Name, err)
+          log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v", variable.Name, variable.Value, err)
         }
         bot.COM_ACTION = int(intValue)
 

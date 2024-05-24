@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 type E6AXIS struct {
@@ -40,38 +40,49 @@ func (p *E6AXIS) UnmarshalJSON(data []byte) error {
   return nil
 }
 
+var E6AXIS_RE = regexp.MustCompile(`A1\s+([-+]?\d*\.\d+|\d+),\s*A2\s+([-+]?\d*\.\d+|\d+),\s*A3\s+([-+]?\d*\.\d+|\d+),\s*A4\s+([-+]?\d*\.\d+|\d+),\s*A5\s+([-+]?\d*\.\d+|\d+),\s*A6\s+([-+]?\d*\.\d+|\d+E?[-+]?\d*)`)
+
 func (p *E6AXIS) Parse(value string) error {
-  value = strings.Trim(value, "{}")
-  value = value[8:] // Remove "E6AXIS: "
-
-  for _, part := range strings.Split(value, ", ") {
-    if len(part) < 4 {
-      return fmt.Errorf("E6AXIS incorrect length of: %s", part)
-    }
-
-    key := part[:2]
-    value := part[3:]
-
-    floatValue, err := strconv.ParseFloat(value, 32)
-    if err != nil {
-      return fmt.Errorf("E6AXIS convert error: %w", err)
-    }
-
-    switch key {
-      case "A1":
-        p.A1 = float32(floatValue)
-      case "A2":
-        p.A2 = float32(floatValue)
-      case "A3":
-        p.A3 = float32(floatValue)
-      case "A4":
-        p.A4 = float32(floatValue)
-      case "A5":
-        p.A5 = float32(floatValue)
-      case "A6":
-        p.A6 = float32(floatValue)
-    }
+  matches := E6AXIS_RE.FindStringSubmatch(value)
+  if matches == nil || len(matches) < 7 {
+    return fmt.Errorf("Input value '%s' does not match expected format", value)
   }
+
+  A1, err := strconv.ParseFloat(matches[1], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A1 parse error: %w", err)
+  }
+  p.A1 = float32(A1)
+
+  A2, err := strconv.ParseFloat(matches[2], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A2 parse error: %w", err)
+  }
+  p.A2 = float32(A2)
+
+  A3, err := strconv.ParseFloat(matches[3], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A3 parse error: %w", err)
+  }
+  p.A3 = float32(A3)
+
+  A4, err := strconv.ParseFloat(matches[4], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A4 parse error: %w", err)
+  }
+  p.A4 = float32(A4)
+
+  A5, err := strconv.ParseFloat(matches[5], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A5 parse error: %w", err)
+  }
+  p.A5 = float32(A5)
+
+  A6, err := strconv.ParseFloat(matches[6], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A6 parse error: %w", err)
+  }
+  p.A6 = float32(A6)
 
   return nil
 }
@@ -113,38 +124,49 @@ func (p *E6POS) UnmarshalJSON(data []byte) error {
   return nil
 }
 
+var E6POS_RE = regexp.MustCompile(`X\s+([-+]?\d*\.\d+|\d+),\s*Y\s+([-+]?\d*\.\d+|\d+),\s*Z\s+([-+]?\d*\.\d+|\d+),\s*A\s+([-+]?\d*\.\d+|\d+),\s*B\s+([-+]?\d*\.\d+|\d+),\s*C\s+([-+]?\d*\.\d+|\d+E?[-+]?\d*)`)
+
 func (p *E6POS) Parse(value string) error {
-  value = strings.Trim(value, "{}")
-  value = value[7:] // Remove "E6POS: "
-
-  for _, part := range strings.Split(value, ", ") {
-    if len(part) < 4 {
-      return fmt.Errorf("E6POS incorrect length of: %s", part)
-    }
-
-    key := part[:1]
-    value := part[3:]
-
-    floatValue, err := strconv.ParseFloat(value, 32)
-    if err != nil {
-      return fmt.Errorf("E6POS convert error: %w", err)
-    }
-
-    switch key {
-      case "X":
-        p.X = float32(floatValue)
-      case "Y":
-        p.Y = float32(floatValue)
-      case "Z":
-        p.Z = float32(floatValue)
-      case "A":
-        p.A = float32(floatValue)
-      case "B":
-        p.B = float32(floatValue)
-      case "C":
-        p.C = float32(floatValue)
-    }
+  matches := E6POS_RE.FindStringSubmatch(value)
+  if matches == nil || len(matches) < 7 {
+    return fmt.Errorf("Input value '%s' does not match expected format", value)
   }
+
+  X, err := strconv.ParseFloat(matches[1], 32)
+  if err != nil {
+    return fmt.Errorf("Input value X parse error: %w", err)
+  }
+  p.X = float32(X)
+
+  Y, err := strconv.ParseFloat(matches[2], 32)
+  if err != nil {
+    return fmt.Errorf("Input value Y parse error: %w", err)
+  }
+  p.Y = float32(Y)
+
+  Z, err := strconv.ParseFloat(matches[3], 32)
+  if err != nil {
+    return fmt.Errorf("Input value Z parse error: %w", err)
+  }
+  p.Z = float32(Z)
+
+  A, err := strconv.ParseFloat(matches[4], 32)
+  if err != nil {
+    return fmt.Errorf("Input value A parse error: %w", err)
+  }
+  p.A = float32(A)
+
+  B, err := strconv.ParseFloat(matches[5], 32)
+  if err != nil {
+    return fmt.Errorf("Input value B parse error: %w", err)
+  }
+  p.B = float32(B)
+
+  C, err := strconv.ParseFloat(matches[6], 32)
+  if err != nil {
+    return fmt.Errorf("Input value C parse error: %w", err)
+  }
+  p.C = float32(C)
 
   return nil
 }
