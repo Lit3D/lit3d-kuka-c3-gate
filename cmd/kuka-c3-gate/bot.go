@@ -262,7 +262,7 @@ func (bot *Bot) processCommands() {
 
       bot.c3Client.Request(requestVariable)
       go bot.oscResponseCallback(comand.Index, comand.Position)
-      return
+      continue
     }
 
     positionE6POS := bot.findE6POSPosition(nextPosition)
@@ -282,7 +282,7 @@ func (bot *Bot) processCommands() {
 
       bot.c3Client.Request(requestVariable)
       go bot.oscResponseCallback(comand.Index, comand.Position)
-      return
+      continue
     }
 
     log.Printf("[BOT EROOR] Incorrect command: %+v\n", comand)

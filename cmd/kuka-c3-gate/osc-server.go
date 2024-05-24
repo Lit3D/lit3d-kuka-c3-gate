@@ -93,8 +93,6 @@ func (osc *OSCCoordsInputPacket) Parse(data []byte) error {
 
 
 func ParseOSCInputPacket(packet []byte) (OSCInputPacketType, string, []byte, error) {
-  log.Printf("%+v\n", packet)
-
   packetLength := len(packet)
   if packetLength < 8 {
     return 0, "", nil, fmt.Errorf("Invalid packet length of %d bytes", packetLength)
