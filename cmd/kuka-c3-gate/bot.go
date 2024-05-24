@@ -276,9 +276,7 @@ func (bot *Bot) oscErrorResponse(index int32, position int32) {
 func (bot *Bot) processCommands() {
   defer bot.wg.Done()
   for comand := range bot.comands {
-    if DEBUG {
-      log.Printf("[BOT DEBUG] Command: %+v\n", comand)
-    }
+    log.Printf("[BOT INFO] Command: %+v\n", comand)
 
     nextPosition := uint8(comand.Position)
     
@@ -293,10 +291,7 @@ func (bot *Bot) processCommands() {
       comRoundValue := "-1"
       requestVariable["COM_ROUNDM"] = &comRoundValue
 
-      if DEBUG {
-        log.Printf("[BOT DEBUG] Move bot to position: %+v\n", positionValue)
-      }
-
+      log.Printf("[BOT INFO] Move bot to position: %+v\n", positionValue)
       bot.c3Client.Request(requestVariable)
       go bot.oscE6AXISResponseCallback(comand.Index, comand.Position, positionE6AXIS)
       continue
@@ -313,10 +308,7 @@ func (bot *Bot) processCommands() {
       comRoundValue := "-1"
       requestVariable["COM_ROUNDM"] = &comRoundValue
 
-      if DEBUG {
-        log.Printf("[BOT DEBUG] Move bot to position: %+v\n", positionValue)
-      }
-
+      log.Printf("[BOT INFO] Move bot to position: %+v\n", positionValue)
       bot.c3Client.Request(requestVariable)
       go bot.oscE6POSResponseCallback(comand.Index, comand.Position, positionE6POS)
       continue
