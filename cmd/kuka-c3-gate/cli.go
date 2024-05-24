@@ -28,7 +28,7 @@ func (i *PortValue) Set(s string) error {
   return nil
 }
 
-func cli() (initConfig int, verboseOutput bool, oscPort PortValue, botsCofig string, ui *UI) {
+func cli() (initConfig int, verboseOutput bool, oscPort PortValue, botsCofig string) {
   var printHelp bool
   var printVersion bool
   flag.BoolVar(&printHelp, "help", false, "Print help and usage information")
@@ -65,10 +65,6 @@ func cli() (initConfig int, verboseOutput bool, oscPort PortValue, botsCofig str
     botsCofig = filepath.Clean(*botsCofigFlag)
   } else {
     botsCofig = filepath.Clean(filepath.Join("./", *botsCofigFlag))
-  }
-
-  if isUIMode {
-    ui = NewUI()
   }
 
   return 

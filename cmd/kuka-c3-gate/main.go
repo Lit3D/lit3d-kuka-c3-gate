@@ -22,7 +22,7 @@ var (
 )
 
 func main() {
-  initConfig, verboseOutput, oscPort, botsCofig, ui := cli()
+  initConfig, verboseOutput, oscPort, botsCofig := cli()
 
   if initConfig > 0 {
     if err := initBotsConfig(botsCofig, initConfig); err != nil {
@@ -42,8 +42,6 @@ func main() {
     }
     defer logFile.Close()
     log.SetOutput(logFile)
-  } else if ui != nil {
-    log.SetOutput(ui)
   }
   
   log.Printf(versionString)
@@ -57,7 +55,6 @@ func main() {
   oscServer.ListenAndServe()
 
   for _, bot := range bots {
-    bot.UI = ui
     if err := bot.Up(oscServer); err != nil {
       log.Fatalf("[FATAL] Bot %s Up failed with error %v\n", bot.Name, err)
     }
@@ -70,10 +67,6 @@ func main() {
   oscServer.Shutdown()
   for _, bot := range bots {
     bot.Shutdown()
-  }
-
-  if ui != nil {
-    ui.Shutdown()
   }
 }
 

@@ -26,8 +26,8 @@ type Bot struct {
   PositionsE6AXIS []E6AXIS `json:"positionsE6AXIS"`
   PositionsE6POS  []E6POS  `json:"positionsE6POS"`
 
-  E6AXIS E6AXIS
-  E6POS  E6POS
+  E6AXIS *E6AXIS
+  E6POS  *E6POS
 
   comands chan *OSCCommandInputPacket
   coords  chan *OSCCoordsInputPacket
@@ -38,7 +38,6 @@ type Bot struct {
   isShutdown chan struct{}
   
   wg sync.WaitGroup
-  UI *UI
 
   COM_ACTION int
 
@@ -47,8 +46,8 @@ type Bot struct {
 }
 
 func (bot *Bot) Up(oscServer *OSCServer) (err error) {
-  bot.E6AXIS = E6AXIS{}
-  bot.E6POS  = E6POS{}
+  bot.E6AXIS = &E6AXIS{}
+  bot.E6POS  = &E6POS{}
 
   if bot.c3Client, err = NewC3Client(bot.Address); err != nil {
     return fmt.Errorf("C3Client creation error: %w", err)
@@ -80,24 +79,15 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
 
-  requestVariable = make(map[string]*string)
-  requestVariable["$AXIS_ACT"] = nil
-  requestVariable["$POS_ACT"] = nil
-  requestVariable["COM_ACTION"] = nil
-  bot.c3Client.Request(requestVariable)
+  // requestVariable = make(map[string]*string)
+  // requestVariable["$AXIS_ACT"] = nil
+  // requestVariable["$POS_ACT"] = nil
+  // requestVariable["COM_ACTION"] = nil
+  // bot.c3Client.Request(requestVariable)
 
   // bot.wg.Add(1)
   // go bot.updateStateLoop()
-
-  bot.updateUI()
   return nil
-}
-
-func (bot *Bot) updateUI() {
-  if bot.UI == nil {
-    return
-  }
-  bot.UI.UpdateBot(bot.Name, bot.UILines())
 }
 
 func (bot *Bot) UILines() []string {
@@ -144,8 +134,6 @@ func (bot *Bot) processVariable() {
       continue
     }
 
-    log.Printf("VarName=%s; VarValue=%s", variable.Name, variable.Value)
-
     switch variable.Name {
       case "$AXIS_ACT":
         if err := bot.E6AXIS.Parse(variable.Value); err != nil {
@@ -173,8 +161,9 @@ func (bot *Bot) processVariable() {
       default:
         log.Printf("[BOT WARNING] Unsupported variable %s with value %s\n", variable.Name, variable.Value)
     }
+
+    log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d\n", bot.Name, bot.Address, bot.E6AXIS.Value(), bot.E6POS.Value(), bot.COM_ACTION)
   }
-  bot.updateUI()
 }
 
 func (bot *Bot) processCommands() {
