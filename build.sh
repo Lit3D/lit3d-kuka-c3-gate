@@ -23,7 +23,7 @@ case "$1" in
     ;;
   run)
     echo "---> Running Lit3D-KUKA-C3-Gate"
-    eval 'go run -mod=vendor -tags=dev -ldflags "-X main.version=${VERSION}" ./cmd/kuka-c3-gate -v -d'
+    eval 'go run -mod=vendor -tags=dev -ldflags "-X main.version=${VERSION}" ./cmd/kuka-c3-gate -v'
     ;;
   *)
     echo "Incorrect build target name" >&2
