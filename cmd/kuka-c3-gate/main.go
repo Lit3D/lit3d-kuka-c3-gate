@@ -108,8 +108,8 @@ func initBotsConfig(filePath string, count int) error {
       ResponsePath:    fmt.Sprintf("/res_%d", id),
       PositionPath:    fmt.Sprintf("/rot_%d", id),
 
-      PositionsE6AXIS: make([]E6AXIS, 0),
-      PositionsE6POS:  make([]E6POS, 0),
+      PositionsE6AXIS: make([]*E6AXIS, 0),
+      PositionsE6POS:  make([]*E6POS, 0),
     }
   }
 

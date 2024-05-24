@@ -23,8 +23,8 @@ type Bot struct {
 
   SafeZone *SafeZone `json:"safeZone"`
 
-  PositionsE6AXIS []E6AXIS `json:"positionsE6AXIS"`
-  PositionsE6POS  []E6POS  `json:"positionsE6POS"`
+  PositionsE6AXIS []*E6AXIS `json:"positionsE6AXIS"`
+  PositionsE6POS  []*E6POS  `json:"positionsE6POS"`
 
   E6AXIS *E6AXIS
   E6POS  *E6POS
@@ -54,7 +54,7 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
     return fmt.Errorf("C3Client creation error: %w", err)
   }
 
-  if bot.oscClient, err = NewOSCClient(bot.Address); err != nil {
+  if bot.oscClient, err = NewOSCClient(bot.ResponseAddress); err != nil {
     return fmt.Errorf("OSCClient creation error: %w", err)
   }
 
@@ -80,29 +80,8 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   requestVariable["@PROXY_PORT"] = nil
   bot.c3Client.Request(requestVariable)
 
-  requestVariable = make(map[string]*string)
-  requestVariable["$VEL_ACT"] = nil
-  requestVariable["$ACC_ACT"] = nil
-  requestVariable["$TOOL"] = nil
-  requestVariable["$BASE"] = nil
-  requestVariable["$IPO_MODE"] = nil
-  bot.c3Client.Request(requestVariable)
-
-  requestVariable = make(map[string]*string)
-  requestVariable["$AXIS_HOME"] = nil
-  requestVariable["$AXIS_LIMITS"] = nil
-  requestVariable["$ADVANCE"] = nil
-  bot.c3Client.Request(requestVariable)
-
-  requestVariable = make(map[string]*string)
-  requestVariable["$ROBOT_STATUS"] = nil
-  requestVariable["$ERROR"] = nil
-  requestVariable["$IN_HOME"] = nil
-  requestVariable["$TIMER"] = nil
-  bot.c3Client.Request(requestVariable)
-
   bot.wg.Add(1)
-  // go bot.updateStateLoop()
+  go bot.updateStateLoop()
   return nil
 }
 
@@ -170,7 +149,7 @@ func (bot *Bot) processVariable() {
         bot.COM_ACTION = int(intValue)
 
       case "COM_ROUNDM":
-        intValue, err := strconv.ParseUint(variable.Value, 10, 8)
+        intValue, err := strconv.ParseInt(variable.Value, 10, 8)
         if err != nil {
           log.Printf("[BOT ERROR] Variable %s with value %s parse error: %v", variable.Name, variable.Value, err)
         }
@@ -199,11 +178,100 @@ func (bot *Bot) processVariable() {
   }
 }
 
+func (bot *Bot) findE6AXISPosition(id uint8) *E6AXIS {
+  for _, position := range bot.PositionsE6AXIS {
+    if position.Id == id {
+      return position
+    }
+  }
+  return nil
+}
+
+func (bot *Bot) findE6POSPosition(id uint8) *E6POS {
+  for _, position := range bot.PositionsE6POS {
+    if position.Id == id {
+      return position
+    }
+  }
+  return nil
+}
+
+func (bot *Bot) oscResponseCallback(index int32, position int32) {
+  oscResponsePacket := &OSCOutputResponsePacket{
+    Path: bot.ResponsePath,
+    Index: index,
+    Position: position,
+    Status: OSCOutputStatus_OK,
+  }
+
+  if DEBUG {
+    log.Printf("[BOT DEBUG] Command response: %+v\n", oscResponsePacket)
+  }
+
+  //bot.oscClient.Send(oscResponsePacket)
+}
+
+func (bot *Bot) oscErrorResponse(index int32, position int32) {
+  oscResponsePacket := &OSCOutputResponsePacket{
+    Path: bot.ResponsePath,
+    Index: index,
+    Position: position,
+    Status: OSCOutputStatus_Error,
+  }
+  bot.oscClient.Send(oscResponsePacket)
+}
+
 func (bot *Bot) processCommands() {
   defer bot.wg.Done()
   for comand := range bot.comands {
-    bot.nextPosition = int(comand.Position)
-    log.Printf("BOT Command: %+v\n", comand)
+    if DEBUG {
+      log.Printf("[BOT DEBUG] Command: %+v\n", comand)
+    }
+
+    nextPosition := uint8(comand.Position)
+    
+    positionE6AXIS := bot.findE6AXISPosition(nextPosition)
+    if positionE6AXIS != nil {
+      // SEND E6AXIS
+      requestVariable := make(map[string]*string)
+      positionValue := positionE6AXIS.Value()
+      requestVariable["COM_E6AXIS"] = &positionValue
+      comActionValue := "2"
+      requestVariable["COM_ACTION"] = &comActionValue
+      comRoundValue := "-1"
+      requestVariable["COM_ROUNDM"] = &comRoundValue
+
+      if DEBUG {
+        log.Printf("[BOT DEBUG] Move bot to position: %+v\n", positionValue)
+      }
+
+      bot.c3Client.Request(requestVariable)
+      go bot.oscResponseCallback(comand.Index, comand.Position)
+      return
+    }
+
+    positionE6POS := bot.findE6POSPosition(nextPosition)
+    if positionE6POS != nil {
+      // SEND E6POS
+      requestVariable := make(map[string]*string)
+      positionValue := positionE6POS.Value()
+      requestVariable["COM_E6POS"] = &positionValue
+      comActionValue := "3"
+      requestVariable["COM_ACTION"] = &comActionValue
+      comRoundValue := "-1"
+      requestVariable["COM_ROUNDM"] = &comRoundValue
+
+      if DEBUG {
+        log.Printf("[BOT DEBUG] Move bot to position: %+v\n", positionValue)
+      }
+
+      bot.c3Client.Request(requestVariable)
+      go bot.oscResponseCallback(comand.Index, comand.Position)
+      return
+    }
+
+    log.Printf("[BOT EROOR] Incorrect command: %+v\n", comand)
+    go bot.oscErrorResponse(comand.Index, comand.Position)
   }
 }
 

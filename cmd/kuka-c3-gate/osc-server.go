@@ -36,11 +36,11 @@ func (osc *OSCCommandInputPacket) Parse(data []byte) error {
 
   reader := bytes.NewReader(data)
   
-  if err := binary.Read(reader, binary.BigEndian, &osc.Index); err != nil {
+  if err := binary.Read(reader, binary.BigEndian, &osc.Position); err != nil {
     return fmt.Errorf("Index parse error: %w", err)
   }
 
-  if err := binary.Read(reader, binary.BigEndian, &osc.Position); err != nil {
+  if err := binary.Read(reader, binary.BigEndian, &osc.Index); err != nil {
     return fmt.Errorf("Position parse error: %w", err)
   }
 
@@ -93,6 +93,8 @@ func (osc *OSCCoordsInputPacket) Parse(data []byte) error {
 
 
 func ParseOSCInputPacket(packet []byte) (OSCInputPacketType, string, []byte, error) {
+  log.Printf("%+v\n", packet)
+
   packetLength := len(packet)
   if packetLength < 8 {
     return 0, "", nil, fmt.Errorf("Invalid packet length of %d bytes", packetLength)
@@ -100,7 +102,7 @@ func ParseOSCInputPacket(packet []byte) (OSCInputPacketType, string, []byte, err
 
   // Find the end of the address pattern (aligned to 4 bytes boundary)
   addrEnd := bytes.IndexByte(packet, 0)
-  if addrEnd == -1 || addrEnd % 4 != 0 {
+  if addrEnd == -1 {
     return 0, "", nil, fmt.Errorf("Invalid address pattern")
   }
 
@@ -115,13 +117,12 @@ func ParseOSCInputPacket(packet []byte) (OSCInputPacketType, string, []byte, err
 
   // Find the end of the type tags (aligned to 4 bytes boundary)
   typeTagEnd := bytes.IndexByte(packet[typeTagStart:], 0)
-  if typeTagEnd == -1 || (typeTagStart + typeTagEnd) % 4 != 0 {
+  if typeTagEnd == -1 {
     return 0, "", nil, fmt.Errorf("Invalid type tags")
   }
 
   typeTags := string(packet[typeTagStart:typeTagStart + typeTagEnd])
   var dataType OSCInputPacketType
-
   switch typeTags {
   case ",ii":
     dataType = OSCInputPacketType_Command
