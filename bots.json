@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Bot_L",
+    "address": "10.211.55.3:7000",
+    "commandPath": "/pos_L",
+    "responseAddress": "10.211.55.3:8110",
+    "responsePath": "/res_L",
+    "positionPath": "/rot_L",
+    "positionsE6AXIS": [
+      [1,   0,  -90,  90,   0,   0,   0],
+      [2, -90, -132, 120, 180,  -7,   0],
+      [3,   0,  -90,   0,   0,   0, 270],
+      [4,  90, -140,  49,  90, -25,   0]
+    ]
+  },
+  {
+    "name": "Bot_R",
+    "address": "10.211.55.3:7000",
+    "commandPath": "/pos_R",
+    "responseAddress": "10.211.55.3:8210",
+    "responsePath": "/res_R",
+    "positionPath": "/rot_R",
+    "positionsE6AXIS": [
+      [1,   0,  -90,  90,   0,   0,   0],
+      [2,  90, -132, 120, 180,  -7,   0],
+      [3,   0,  -90,   0,   0,   0, 270],
+      [4, -90, -140,  49,  90,  25,   0]
+    ]
+  }
+]
