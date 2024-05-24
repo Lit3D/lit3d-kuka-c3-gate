@@ -9,7 +9,7 @@ import (
 )
 
 const (
-  defaultOSCPort = 8765
+  defaultOSCPort = 8766
   defaultBotsConfig = "bots.json"
 )
 
