@@ -40,7 +40,7 @@ func (p *E6AXIS) UnmarshalJSON(data []byte) error {
   return nil
 }
 
-var E6AXIS_RE = regexp.MustCompile(`A1\s+([-+]?\d*\.\d+|\d+),\s*A2\s+([-+]?\d*\.\d+|\d+),\s*A3\s+([-+]?\d*\.\d+|\d+),\s*A4\s+([-+]?\d*\.\d+|\d+),\s*A5\s+([-+]?\d*\.\d+|\d+),\s*A6\s+([-+]?\d*\.\d+|\d+E?[-+]?\d*)`)
+var E6AXIS_RE = regexp.MustCompile(`A1\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A2\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A3\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A4\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A5\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A6\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+)`)
 
 func (p *E6AXIS) Parse(value string) error {
   matches := E6AXIS_RE.FindStringSubmatch(value)
@@ -124,7 +124,7 @@ func (p *E6POS) UnmarshalJSON(data []byte) error {
   return nil
 }
 
-var E6POS_RE = regexp.MustCompile(`X\s+([-+]?\d*\.\d+|\d+),\s*Y\s+([-+]?\d*\.\d+|\d+),\s*Z\s+([-+]?\d*\.\d+|\d+),\s*A\s+([-+]?\d*\.\d+|\d+),\s*B\s+([-+]?\d*\.\d+|\d+),\s*C\s+([-+]?\d*\.\d+|\d+E?[-+]?\d*)`)
+var E6POS_RE = regexp.MustCompile(`X\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*Y\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*Z\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*A\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*B\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+),\s*C\s+([-+]?\d*\.\d+(?:[eE][-+]?\d+)?|\d+)`)
 
 func (p *E6POS) Parse(value string) error {
   matches := E6POS_RE.FindStringSubmatch(value)
