@@ -91,21 +91,6 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   return nil
 }
 
-func (bot *Bot) UILines() []string {
-  lines := make([]string, 5)
-  lines[0] = fmt.Sprintf("%s   Address: %s   COM_ACTION: %d", bot.Name, bot.Address, bot.COM_ACTION)
-  lines[1] = bot.E6AXIS.Value()
-  lines[2] = bot.E6POS.Value()
-  lines[4] = fmt.Sprintf("Positions (Current: %d  Next: %d):", bot.currentPosition, bot.nextPosition)
-  for _, position := range bot.PositionsE6AXIS {
-    lines = append(lines, fmt.Sprintf(" %d: %s", position.Id, position.Value()))
-  }
-  for _, position := range bot.PositionsE6POS {
-    lines = append(lines, fmt.Sprintf(" %d: %s", position.Id, position.Value()))
-  }
-  return lines
-}
-
 func (bot *Bot) updateStateLoop() {
   defer bot.wg.Done()
   
