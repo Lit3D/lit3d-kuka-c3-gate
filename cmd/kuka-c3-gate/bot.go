@@ -102,7 +102,7 @@ func (bot *Bot) Up(oscServer *OSCServer) (err error) {
   bot.c3Client.Request(requestVariable)
 
   bot.wg.Add(1)
-  go bot.updateStateLoop()
+  // go bot.updateStateLoop()
   return nil
 }
 
