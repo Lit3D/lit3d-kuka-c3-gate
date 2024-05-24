@@ -167,7 +167,7 @@ func (bot *Bot) processVariable() {
     }
 
     if DEBUG {
-      log.Printf("=====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %.5f\nCOM_E6AXIS: %s\nCOM_E6POS: %s\n",
+      log.Printf("[BOT DEBUG] =====> %s %s\nE6AXIS: %s\nE6POS: %s\nCOM_ACTION: %d; COM_ROUNDM: %.5f\nCOM_E6AXIS: %s\nCOM_E6POS: %s\n",
         bot.Name,
         bot.Address,
         bot.E6AXIS.Value(),
