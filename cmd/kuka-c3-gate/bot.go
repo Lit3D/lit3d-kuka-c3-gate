@@ -101,8 +101,6 @@ func (bot *Bot) updateStateLoop() {
   requestVariable["$POS_ACT"] = nil
   requestVariable["COM_ACTION"] = nil
   requestVariable["COM_ROUNDM"] = nil
-  requestVariable["$ROBOT_STATUS"] = nil
-  requestVariable["$ROB_STOPPED"] = nil
 
   for {
     select {
