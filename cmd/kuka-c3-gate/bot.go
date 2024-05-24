@@ -103,7 +103,7 @@ func (bot *Bot) UILines() []string {
 func (bot *Bot) updateStateLoop() {
   defer bot.wg.Done()
   
-  ticker := time.NewTicker(5000 * time.Microsecond)
+  ticker := time.NewTicker(time.Duration(bot.UpdateInterval) * time.Microsecond)
 
   requestVariable := make(map[string]*string)
   requestVariable["$AXIS_ACT"] = nil
