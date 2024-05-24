@@ -55,7 +55,9 @@ func main() {
   }
 
   oscServer := NewOSCServer(oscPort)
-  oscServer.ListenAndServe()
+  if err := oscServer.ListenAndServe(); err != nil {
+    log.Fatalf("[FATAL] OSC Server start error: %v\n", err)
+  }
 
   for _, bot := range bots {
     if err := bot.Up(oscServer); err != nil {
