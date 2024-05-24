@@ -29,8 +29,14 @@ type Bot struct {
   E6AXIS *E6AXIS
   E6POS  *E6POS
 
+  ROBOT_STATUS string
+  ROB_STOPPED string
+
   COM_E6AXIS *E6AXIS
   COM_E6POS *E6POS
+
+  COM_ACTION int
+  COM_ROUNDM float32
 
   comands chan *OSCCommandInputPacket
   coords  chan *OSCCoordsInputPacket
@@ -41,12 +47,6 @@ type Bot struct {
   isShutdown chan struct{}
   
   wg sync.WaitGroup
-
-  COM_ACTION int
-  COM_ROUNDM float32
-
-  currentPosition int
-  nextPosition int
 }
 
 func (bot *Bot) Up(oscServer *OSCServer) (err error) {
@@ -116,6 +116,8 @@ func (bot *Bot) updateStateLoop() {
   requestVariable["$POS_ACT"] = nil
   requestVariable["COM_ACTION"] = nil
   requestVariable["COM_ROUNDM"] = nil
+  requestVariable["$ROBOT_STATUS"] = nil
+  requestVariable["$ROB_STOPPED"] = nil
 
   for {
     select {
