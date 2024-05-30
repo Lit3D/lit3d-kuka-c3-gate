@@ -17,13 +17,13 @@ if [ "$TARGET_OS" == "windows" ]; then TARGET_EXT=".exe"; fi
 
 case "$1" in
   release)
-    echo "---> Build Lit3D-KUKA-C3-Gate for ${TARGET_OS}-${TARGET_ARCH} to build/lit3d-kuka-c3-gate${TARGET_EXT}"
-    eval 'GOOS=${TARGET_OS} GOARCH=${TARGET_ARCH} go build -mod=vendor -ldflags "-w -s -X main.version=${VERSION}" -o ./build/lit3d-kuka-c3-gate${TARGET_EXT} ./cmd/kuka-c3-gate'
+    echo "---> Build KUKA-C3-OSC-Gate for ${TARGET_OS}-${TARGET_ARCH} to build/kuka-c3-osc-gate${TARGET_EXT}"
+    eval 'GOOS=${TARGET_OS} GOARCH=${TARGET_ARCH} go build -mod=vendor -ldflags "-w -s -X main.version=${VERSION}" -o ./build/kuka-c3-osc-gate${TARGET_EXT} ./cmd/kuka-c3-osc-gate'
     cp ./bots.json ./build/bots.json
     ;;
   run)
-    echo "---> Running Lit3D-KUKA-C3-Gate"
-    eval 'go run -mod=vendor -tags=dev -ldflags "-X main.version=${VERSION}" ./cmd/kuka-c3-gate -v'
+    echo "---> Running KUKA-C3-OSC-Gate"
+    eval 'go run -mod=vendor -tags=dev -ldflags "-X main.version=${VERSION}" ./cmd/kuka-c3-osc-gate -v'
     ;;
   *)
     echo "Incorrect build target name" >&2
