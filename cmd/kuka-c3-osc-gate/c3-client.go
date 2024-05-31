@@ -11,7 +11,7 @@ import (
 
 const (
   C3Client_PacketsBuffer = 512
-  C3Client_TCPBuffer = 1024
+  C3Client_TCPBuffer = 2048
   C3Client_RetryTimeout = 5 * time.Second
 )
 

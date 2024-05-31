@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 type PositionType uint8
@@ -14,6 +16,9 @@ const (
   PositionType_NIL    PositionType = 0
   PositionType_E6AXIS PositionType = 1
   PositionType_E6POS  PositionType = 2
+
+  Position_Random_Min = float32(-50)
+  Position_Random_Max = float32(50)
 )
 
 type Position struct {
@@ -22,11 +27,30 @@ type Position struct {
   values    [14]float32
 }
 
+func init() {
+  rand.Seed(time.Now().UnixNano())
+}
+
+func randomPositionValue() float32 {
+  return Position_Random_Min + rand.Float32()*(Position_Random_Max - Position_Random_Min)
+}
+
 func NewPosition(id uint16, valueType PositionType) *Position {
   return &Position{
     id: id,
     valueType: valueType,
     values: [14]float32{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  }
+}
+
+func NewRandomPosition(id uint16, valueType PositionType) *Position {
+  return &Position{
+    id: id,
+    valueType: valueType,
+    values: [14]float32{
+      randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(),
+      0, 0, 0, 0, 0, 0, 0, 0,
+    },
   }
 }
 

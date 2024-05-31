@@ -24,19 +24,19 @@ type Bot struct {
 	Name    string `json:"name"`
   Address string `json:"address"`
 
-  AxisPath     string `json:"axisPath"`
-  CoordsPath   string `json:"coordsPath"`
-  PositionPath string `json:"positionPath"`
+  OSCRequestAxis     *string `json:"oscRequestAxisPath"`
+  OSCRequestCoords   *string `json:"oscRequestCoordsPath"`
+  OSCRequestPosition *string `json:"oscRequestPositionPath"`
 
-  ResponseAddress  *string `json:"responseAddress"`
+  OSCResponseAddress  *string `json:"oscResponseAddress"`
   
-  ResponseAxes     *string `json:"responseAxes"`
-  ResponseCoords   *string `json:"responseCoords"`
-  ResponsePosition *string `json:"responsPosition"`
+  OSCResponseAxes     *string `json:"oscResponseAxes"`
+  OSCResponseCoords   *string `json:"oscResponseCoords"`
+  OSCResponsePosition *string `json:"oscResponsPosition"`
 
   Positions []*Position `json:"positions"`
 
-  OSCInput chan *OSCPacket
+  oscInput chan *OSCPacket
 
   tagId    uint16
   tagIdMux sync.RWMutex
@@ -47,21 +47,21 @@ type Bot struct {
   isMovement bool
   isMovementMux sync.RWMutex
 
-  AXIS_ACT    *Position
-  POS_ACT     *Position
-  COM_ACTION  C3VariableComActionValues
-  COM_ROUNDM  C3VariableComRoundmValues
-  POSITION    *Position
+  c3AXIS_ACT    *Position
+  c3POS_ACT     *Position
+  c3COM_ACTION  C3VariableComActionValues
+  c3COM_ROUNDM  C3VariableComRoundmValues
+  c3POSITION    *Position
   positionMux sync.RWMutex
 
-  OFFSET    *Position
+  c3OFFSET    *Position
   offsetMux sync.RWMutex
 
-  PROXY_TYPE     string
-  PROXY_VERSION  string
-  PROXY_HOSTNAME string
-  PROXY_ADDRESS  string
-  PROXY_PORT     string
+  c3PROXY_TYPE     string
+  c3PROXY_VERSION  string
+  c3PROXY_HOSTNAME string
+  c3PROXY_ADDRESS  string
+  c3PROXY_PORT     string
   proxyMux       sync.RWMutex
 
   isShutdown bool
@@ -70,43 +70,59 @@ type Bot struct {
 
 func NewBot() (*Bot, error) {
   return &Bot{
-    tagId:      1,
-    OSCInput:   make(chan *OSCPacket, Bot_PacketsBuffer),
-    AXIS_ACT:   NewPosition(0xFFFF, PositionType_E6AXIS),
-    POS_ACT:    NewPosition(0xFFFF, PositionType_E6POS),
-    POSITION:   NewPosition(0xFFFF, PositionType_E6POS),
-    OFFSET:     NewPosition(0xFFFF, PositionType_E6POS),
-    COM_ACTION: C3Variable_COM_ACTION_EMPTY,
-    COM_ROUNDM: C3Variable_COM_ROUNDM_NONE,
+    tagId:        1,
+    c3AXIS_ACT:   NewPosition(0xFFFF, PositionType_E6AXIS),
+    c3POS_ACT:    NewPosition(0xFFFF, PositionType_E6POS),
+    c3POSITION:   NewPosition(0xFFFF, PositionType_E6POS),
+    c3OFFSET:     NewPosition(0xFFFF, PositionType_E6POS),
+    c3COM_ACTION: C3Variable_COM_ACTION_EMPTY,
+    c3COM_ROUNDM: C3Variable_COM_ROUNDM_NONE,
+    Positions:    make([]*Position, 0),
   }, nil
 }
 
 func (bot *Bot) MarshalJSON() ([]byte, error) {
-  return json.Marshal(bot)
+  type Alias Bot
+  return json.Marshal(&struct {
+    *Alias
+  }{
+    Alias: (*Alias)(bot),
+  })
 }
 
 func (bot *Bot) UnmarshalJSON(data []byte) error {
-  bot.tagId = 1
-  
-  bot.OSCInput = make(chan *OSCPacket, Bot_PacketsBuffer)
-  bot.AXIS_ACT = NewPosition(0xFFFF, PositionType_E6AXIS)
-  bot.POS_ACT  = NewPosition(0xFFFF, PositionType_E6POS)
-  bot.POSITION = NewPosition(0xFFFF, PositionType_E6POS)
-  bot.OFFSET   = NewPosition(0xFFFF, PositionType_E6POS)
+  type Alias Bot
+  aux := &struct {
+    *Alias
+  }{
+    Alias: (*Alias)(bot),
+  }
 
-  bot.COM_ACTION = C3Variable_COM_ACTION_EMPTY
-  bot.COM_ROUNDM = C3Variable_COM_ROUNDM_NONE
+  if err := json.Unmarshal(data, &aux); err != nil {
+    return err
+  }
 
-  return json.Unmarshal(data, bot)
+  bot.tagId        = 1
+  bot.c3AXIS_ACT   = NewPosition(0xFFFF, PositionType_E6AXIS)
+  bot.c3POS_ACT    = NewPosition(0xFFFF, PositionType_E6POS)
+  bot.c3POSITION   = NewPosition(0xFFFF, PositionType_E6POS)
+  bot.c3OFFSET     = NewPosition(0xFFFF, PositionType_E6POS)
+  bot.c3COM_ACTION = C3Variable_COM_ACTION_EMPTY
+  bot.c3COM_ROUNDM = C3Variable_COM_ROUNDM_NONE
+  bot.Positions    = make([]*Position, 0)
+  return nil
 }
 
 func (bot *Bot) Up() (err error) {
+  bot.oscInput = make(chan *OSCPacket, Bot_PacketsBuffer)
+  bot.isShutdown = false
+  
   if bot.c3Client, err = NewC3Client(bot.Address); err != nil {
     return fmt.Errorf("C3Client creation error: %w", err)
   }
 
-  if bot.ResponseAddress != nil {
-    if bot.oscClient, err = NewOSCClient(*bot.ResponseAddress); err != nil {
+  if bot.OSCResponseAddress != nil {
+    if bot.oscClient, err = NewOSCClient(*bot.OSCResponseAddress); err != nil {
       return fmt.Errorf("OSCClient creation error: %w", err)
     }
   } else {
@@ -126,7 +142,6 @@ func (bot *Bot) Up() (err error) {
   }
 
   bot.LogBot()
-  bot.isShutdown = false
 
   bot.wg.Add(1)
   go bot.processOSCPackets()
@@ -137,13 +152,13 @@ func (bot *Bot) Up() (err error) {
   return nil
 }
 
-func (bot *Bot) Down() error {
+func (bot *Bot) Shutdown() error {
   bot.isShutdown = true
-  close(bot.OSCInput)
+  close(bot.oscInput)
   bot.oscClient.Shutdown()
   bot.c3Client.Shutdown()
   bot.wg.Wait()
-  log.Printf("[Bot INFO] Bot shutdown successfully\n")
+  log.Printf("[Bot INFO] Shutdown successfully\n")
   return nil
 }
 
@@ -160,7 +175,7 @@ func (bot *Bot) LogBot() {
   defer bot.offsetMux.RUnlock()
   log.Printf(
     "==========> Bot: %s[%s]\n" +
-    "AxisPath: %s CoordsPath: %s PositionPath: %s\n" + 
+    "AxisPath: %v CoordsPath: %v PositionPath: %v\n" + 
     "ResponseAddress: %v ResponseAxes: %v ResponseCoords: %v ResponsePosition: %v\n" +
     "ProxyType: %s ProxyVersion: %s ProxyHost: %s ProxyAddress: %s ProxyPort: %s\n" +
     "AXIS_ACT: %s\n" +
@@ -169,14 +184,14 @@ func (bot *Bot) LogBot() {
     "POSITION: %s\n" +
     "COM_ACTION: %s COM_ROUNDM: %s isMovement: %t tagId: %d",
     bot.Name, bot.Address,
-    bot.AxisPath, bot.CoordsPath, bot.PositionPath,
-    bot.ResponseAddress, bot.ResponseAxes, bot.ResponseCoords, bot.ResponsePosition, 
-    bot.PROXY_TYPE, bot.PROXY_VERSION, bot.PROXY_HOSTNAME, bot.PROXY_ADDRESS, bot.PROXY_PORT,
-    bot.AXIS_ACT.ValueFull(),
-    bot.POS_ACT.ValueFull(),
-    bot.OFFSET.ValueFull(),
-    bot.POSITION.ValueFull(),
-    bot.COM_ACTION, bot.COM_ROUNDM, bot.isMovement, bot.tagId,
+    bot.OSCRequestAxis, bot.OSCRequestCoords, bot.OSCRequestPosition,
+    bot.OSCResponseAddress, bot.OSCResponseAxes, bot.OSCResponseCoords, bot.OSCResponsePosition, 
+    bot.c3PROXY_TYPE, bot.c3PROXY_VERSION, bot.c3PROXY_HOSTNAME, bot.c3PROXY_ADDRESS, bot.c3PROXY_PORT,
+    bot.c3AXIS_ACT.ValueFull(),
+    bot.c3POS_ACT.ValueFull(),
+    bot.c3OFFSET.ValueFull(),
+    bot.c3POSITION.ValueFull(),
+    bot.c3COM_ACTION, bot.c3COM_ROUNDM, bot.isMovement, bot.tagId,
   )
 }
 
@@ -271,6 +286,7 @@ func (bot *Bot) Move(p *Position) (bool, error) {
   loop: for {
     select {
       case <-timeout:
+        bot.isMovement = false
         return true, fmt.Errorf("Move timeout break")
       
       default:
@@ -279,7 +295,7 @@ func (bot *Bot) Move(p *Position) (bool, error) {
         // }
 
         bot.positionMux.RLock()
-        if bot.POSITION.Equal(p, Bot_Position_Tolerance) {
+        if bot.c3POSITION.Equal(p, Bot_Position_Tolerance) {
           readyFlag++
         }
         bot.positionMux.RUnlock()
@@ -292,7 +308,6 @@ func (bot *Bot) Move(p *Position) (bool, error) {
 
   log.Printf("[Bot INFO] Move ready position %s\n", p.Value())
   bot.isMovement = false
-  
   return false, nil
 }
 
@@ -354,12 +369,12 @@ func (bot *Bot) UpdatePosition() error {
   }
 
   bot.positionMux.Lock()
-  bot.AXIS_ACT = AXIS_ACT
-  bot.POS_ACT = POS_ACT
-  bot.COM_ACTION = COM_ACTION
-  bot.COM_ROUNDM = COM_ROUNDM
+  bot.c3AXIS_ACT = AXIS_ACT
+  bot.c3POS_ACT = POS_ACT
+  bot.c3COM_ACTION = COM_ACTION
+  bot.c3COM_ROUNDM = COM_ROUNDM
   bot.offsetMux.RUnlock()
-  bot.POSITION = POS_ACT.WithOffset(bot.OFFSET)
+  bot.c3POSITION = POS_ACT.WithOffset(bot.c3OFFSET)
   bot.offsetMux.RUnlock()
   bot.positionMux.Unlock()
 
@@ -371,7 +386,7 @@ func (bot *Bot) UpdateOffset() error {
   defer bot.positionMux.RUnlock()
   bot.offsetMux.Lock()
   defer bot.offsetMux.Unlock()
-  bot.OFFSET = bot.POS_ACT.Clone()
+  bot.c3OFFSET = bot.c3POS_ACT.Clone()
   return nil
 }
 
@@ -428,19 +443,19 @@ func (bot *Bot) UpdateProxyInfo() error {
 
     switch variable.Name {
       case C3Variable_PROXY_TYPE:
-        bot.PROXY_TYPE = variable.Value
+        bot.c3PROXY_TYPE = variable.Value
 
       case C3Variable_PROXY_VERSION:
-        bot.PROXY_VERSION = variable.Value
+        bot.c3PROXY_VERSION = variable.Value
 
       case C3Variable_PROXY_HOSTNAME:
-        bot.PROXY_HOSTNAME = variable.Value
+        bot.c3PROXY_HOSTNAME = variable.Value
 
       case C3Variable_PROXY_ADDRESS:
-        bot.PROXY_ADDRESS = variable.Value
+        bot.c3PROXY_ADDRESS = variable.Value
 
       case C3Variable_PROXY_PORT:
-        bot.PROXY_PORT = variable.Value
+        bot.c3PROXY_PORT = variable.Value
     }
   }
   bot.proxyMux.Unlock()
@@ -448,17 +463,31 @@ func (bot *Bot) UpdateProxyInfo() error {
   return nil
 }
 
+func (bot *Bot) OSCPacket(oscPacket *OSCPacket) {
+  select {
+    case bot.oscInput <- oscPacket:
+    default:
+      log.Printf("[Bot WARNING] OSC Input channel is full, discarding packet\n")
+  }
+}
+
 func (bot *Bot) processOSCPackets() {
   defer bot.wg.Done()
 
-  for packet := range bot.OSCInput {
-    switch packet.Path {
-      case bot.AxisPath:
-        bot.processOSCAxis(packet)
-      case bot.CoordsPath:
-        bot.processOSCCoords(packet)
-      case bot.PositionPath:
-        bot.processOSCPosition(packet)
+  for packet := range bot.oscInput {
+    if bot.OSCRequestAxis != nil && packet.Path == *bot.OSCRequestAxis {
+      bot.processOSCAxis(packet)
+      continue
+    }
+
+    if bot.OSCRequestCoords != nil && packet.Path == *bot.OSCRequestCoords {
+      bot.processOSCCoords(packet)
+      continue
+    }
+
+    if bot.OSCRequestPosition != nil && packet.Path == *bot.OSCRequestPosition {
+      bot.processOSCPosition(packet)
+      continue
     }
   }
 }
@@ -513,25 +542,34 @@ func (bot *Bot) processOSCCoords(oscPacket *OSCPacket) {
   }(position)
 }
 
+func (bot *Bot) GetPosition(positionId uint16) (*Position, error) {
+  var position *Position = nil
+  for _, position = range bot.Positions {
+    if position.Id() == positionId {
+      break
+    }
+  }
+  
+  if position == nil {
+    return nil, fmt.Errorf("Incorrect OSC Position id of %d", positionId)
+  }
+
+  return position, nil
+}
+
 func (bot *Bot) processOSCPosition(oscPacket *OSCPacket) {
   values := oscPacket.Values()
   if len(values) != 2 {
     log.Printf("[Bot ERROR] Incorrect OSC Position values length of %+v\n", values)
     return
   }
-
-  var position *Position = nil
+  
   var positionId uint16 = uint16(values[0].(int32))
   var index int32 = values[1].(int32)
 
-  for _, position = range bot.Positions {
-    if position.Id() == positionId {
-      break
-    }
-  }
-
-  if position == nil {
-    log.Printf("[Bot ERROR] Incorrect OSC Position id of %d\n", positionId)
+  position, err := bot.GetPosition(positionId)
+  if err != nil {
+    log.Printf("[Bot ERROR] %v\n", err)
     go func() {
       if err := bot.oscResponsePosition(OSCOutputStatus_Error, index, positionId); err != nil {
         log.Printf("[Bot ERROR] OSC Response error %v\n", err)
@@ -562,19 +600,18 @@ func (bot *Bot) oscResponseAxis(position *Position) error {
     return nil
   }
 
-  if bot.ResponseAxes == nil {
+  if bot.OSCResponseAxes == nil {
     return nil
   }
 
-  oscPacker := NewOSCPacket()
-  oscPacker.Path = *bot.ResponseAxes
-  oscPacker.Append(position.A1)
-  oscPacker.Append(position.A2)
-  oscPacker.Append(position.A3)
-  oscPacker.Append(position.A4)
-  oscPacker.Append(position.A5)
-  oscPacker.Append(position.A6)
-  return bot.oscClient.Send(oscPacker)
+  return bot.oscClient.ResponseAxis(*bot.OSCResponseAxes, position)
+}
+
+func (bot *Bot) oscResponseCurrentAxis() error {
+  bot.positionMux.RLock()
+  defer bot.positionMux.RUnlock()
+  position := bot.c3AXIS_ACT.Clone()
+  return bot.oscResponseAxis(position)
 }
 
 func (bot *Bot) oscResponseCoords(position *Position) error {
@@ -582,21 +619,18 @@ func (bot *Bot) oscResponseCoords(position *Position) error {
     return nil
   }
 
-  if bot.ResponseCoords == nil {
+  if bot.OSCResponseCoords == nil {
     return nil
   }
 
-  oscPacker := NewOSCPacket()
-  oscPacker.Path = *bot.ResponseCoords
-  oscPacker.Append(position.X)
-  oscPacker.Append(position.Y)
-  oscPacker.Append(position.Z)
-  oscPacker.Append(position.A)
-  oscPacker.Append(position.B)
-  oscPacker.Append(position.C)
-  // oscPacker.Append(position.S)
-  // oscPacker.Append(position.T)
-  return bot.oscClient.Send(oscPacker)
+  return bot.oscClient.ResponseCoords(*bot.OSCResponseCoords, position)
+}
+
+func (bot *Bot) oscResponseCurrentCoords() error {
+  bot.positionMux.RLock()
+  defer bot.positionMux.RUnlock()
+  position := bot.c3POSITION.Clone()
+  return bot.oscResponseCoords(position)
 }
 
 func (bot *Bot) oscResponsePosition(status OSCOutputStatus, index int32, positionId uint16) error {
@@ -604,21 +638,11 @@ func (bot *Bot) oscResponsePosition(status OSCOutputStatus, index int32, positio
     return nil
   }
 
-  if bot.ResponsePosition == nil {
+  if bot.OSCResponsePosition == nil {
     return nil
   }
 
-  oscPacker := NewOSCPacket()
-  oscPacker.Path = *bot.ResponsePosition
-  oscPacker.Append(int32(status))
-  oscPacker.Append(int32(index))
-  oscPacker.Append(int32(positionId))
-  return bot.oscClient.Send(oscPacker)
+  return bot.oscClient.ResponsePosition(*bot.OSCResponsePosition, status, index, positionId)
 }
 
-func (bot *Bot) oscResponseCurrentCoords() error {
-  bot.positionMux.RLock()
-  defer bot.positionMux.RUnlock()
-  position := bot.POSITION.Clone()
-  return bot.oscResponseCoords(position)
-}
+

@@ -482,17 +482,11 @@ func (c3 *C3Message) Response(packet []byte) error {
       return fmt.Errorf("Packet read VariableValue error: %w", err)
     }
 
-    var utf8Buffer bytes.Buffer
-    for _, r := range utf16.Decode(utf16Chars) {
-      var buf [4]byte
-      n := utf8.EncodeRune(buf[:], r)
-      _, err := utf8Buffer.Write(buf[:n])
-      if err != nil {
-        return fmt.Errorf("Packet parse VariableValue error: %w", err)
-      }
+    variableValue, err := messageUTF16toString(utf16Chars)
+    if err != nil {
+      return fmt.Errorf("Packet parse VariableValue error: %w", err)
     }
 
-    variableValue := utf8Buffer.String()
     c3.variableValueList[0] = &variableValue
     c3.variableErrorCodeList[0] = C3Message_Error_Success
   
@@ -526,17 +520,11 @@ func (c3 *C3Message) Response(packet []byte) error {
         return fmt.Errorf("Packet read Variable %d Value error: %w", i, err)
       }
 
-      var utf8Buffer bytes.Buffer
-      for _, r := range utf16.Decode(utf16Chars) {
-        var buf [4]byte
-        n := utf8.EncodeRune(buf[:], r)
-        _, err := utf8Buffer.Write(buf[:n])
-        if err != nil {
-          return fmt.Errorf("Packet parse Variable %d Value error: %w", i, err)
-        }
+      variableValue, err := messageUTF16toString(utf16Chars)
+      if err != nil {
+        return fmt.Errorf("Packet parse Variable %d Value error: %w", i, err)
       }
 
-      variableValue := utf8Buffer.String()
       c3.variableValueList[i] = &variableValue
     }
 
@@ -552,4 +540,17 @@ func (c3 *C3Message) Response(packet []byte) error {
 
   return nil 
   
+}
+
+func messageUTF16toString(utf16Chars []uint16) (string, error) {
+  var utf8Buffer bytes.Buffer
+  for _, r := range utf16.Decode(utf16Chars) {
+    var buf [4]byte
+    n := utf8.EncodeRune(buf[:], r)
+    _, err := utf8Buffer.Write(buf[:n])
+    if err != nil {
+      return "", err
+    }
+  }
+  return utf8Buffer.String(), nil
 }

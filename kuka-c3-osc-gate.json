@@ -1,0 +1,31 @@
+{
+  "oscRequestPositionPath": null,
+  "oscResponseAddress": null,
+  "oscResponsePositionPath": null,
+  "bots": [
+    {
+      "name": "",
+      "address": "",
+      "oscRequestAxisPath": null,
+      "oscRequestCoordsPath": null,
+      "oscRequestPositionPath": null,
+      "oscResponseAddress": null,
+      "oscResponseAxes": null,
+      "oscResponseCoords": null,
+      "oscResponsPosition": null,
+      "positions": []
+    },
+    {
+      "name": "",
+      "address": "",
+      "oscRequestAxisPath": null,
+      "oscRequestCoordsPath": null,
+      "oscRequestPositionPath": null,
+      "oscResponseAddress": null,
+      "oscResponseAxes": null,
+      "oscResponseCoords": null,
+      "oscResponsPosition": null,
+      "positions": []
+    }
+  ]
+}

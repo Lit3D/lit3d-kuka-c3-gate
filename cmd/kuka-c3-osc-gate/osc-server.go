@@ -11,6 +11,10 @@ const (
   OSCServer_UDPBuffer = 1024
 )
 
+type OSCListener interface {
+   OSCPacket(oscPacket *OSCPacket)
+}
+
 type OSCServer struct {
   addr net.UDPAddr
   conn *net.UDPConn
@@ -18,7 +22,7 @@ type OSCServer struct {
   packets   chan []byte
   closeOnce sync.Once
 
-  subscribers    []*Bot
+  subscribers    []OSCListener
   subscribersMux sync.RWMutex
 
   wg sync.WaitGroup
@@ -33,7 +37,7 @@ func NewOSCServer(addr net.UDPAddr) *OSCServer {
     conn: nil,
     
     packets:     make(chan []byte, OSCServer_PacketsBuffer),
-    subscribers: make([]*Bot, 0),
+    subscribers: make([]OSCListener, 0),
   }
 }
 
@@ -79,12 +83,8 @@ func (osc *OSCServer) distributePackets() {
       continue
     }
     osc.subscribersMux.RLock()
-    for _, bot := range osc.subscribers {
-      select {
-        case bot.OSCInput <- oscPacket:
-        default:
-          log.Printf("[OSCServer WARNING] Subscribers channel is full, discarding packet\n")
-      }
+    for _, listener := range osc.subscribers {
+      listener.OSCPacket(oscPacket)
     }
     osc.subscribersMux.RUnlock()
   }
@@ -117,13 +117,13 @@ func (osc *OSCServer) Shutdown() {
 
 func (osc *OSCServer) UnSubscribeAll() {
   osc.subscribersMux.Lock()
-  osc.subscribers = make([]*Bot, 0)
+  osc.subscribers = make([]OSCListener, 0)
   osc.subscribersMux.Unlock()
 }
 
-func (osc *OSCServer) UnSubscribe(bot *Bot) {
+func (osc *OSCServer) UnSubscribe(listener OSCListener) {
   for i, other := range osc.subscribers {
-    if other == bot {
+    if other == listener {
       osc.subscribersMux.Lock()
       osc.subscribers = append(osc.subscribers[:i], osc.subscribers[i+1:]...)
       osc.subscribersMux.Unlock()
@@ -132,9 +132,9 @@ func (osc *OSCServer) UnSubscribe(bot *Bot) {
   }
 }
 
-func (osc *OSCServer) Subscribe(bot *Bot) {
-  osc.UnSubscribe(bot)
+func (osc *OSCServer) Subscribe(listener OSCListener) {
+  osc.UnSubscribe(listener)
   osc.subscribersMux.Lock()
-  osc.subscribers = append(osc.subscribers, bot)
+  osc.subscribers = append(osc.subscribers, listener)
   osc.subscribersMux.Unlock()
 }

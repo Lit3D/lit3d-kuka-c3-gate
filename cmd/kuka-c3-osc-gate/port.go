@@ -8,6 +8,8 @@ import (
 
 type PortValue uint16
 
+const PortValue_NIL PortValue = 0
+
 func (i *PortValue) String() string {
   return fmt.Sprint(*i)
 }
