@@ -1,0 +1,46 @@
+:host {
+  font-size: 10px;
+
+  display: grid;
+  grid-template-columns: auto min-content;
+  align-items: center;
+}
+
+h1 {
+	margin: 8px 0 0 0;
+	padding: 0;
+
+	font-size: 1.25em;
+	font-weight: normal;
+}
+
+h1:before {
+	content: "Position #";
+}
+
+button {
+	grid-row-end: span 2;
+	font-size: 1.1em;
+
+	text-wrap: nowrap;
+	pointer-events: auto;
+}
+
+button:before {
+	content: "Move to #";
+}
+
+.move-positions {
+
+	p {
+		margin: 0.75ex 0 0 0;
+		padding: 0;
+
+		font-size: 1em;
+		font-weight: normal;
+		line-height: 1.35;
+
+		display: flex;
+		gap: 16px;
+	}
+}

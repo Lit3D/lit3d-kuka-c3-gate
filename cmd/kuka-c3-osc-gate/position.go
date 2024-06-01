@@ -22,7 +22,6 @@ const (
 )
 
 type Position struct {
-  id        uint16
   valueType PositionType
   values    [14]float32
 }
@@ -35,17 +34,15 @@ func randomPositionValue() float32 {
   return Position_Random_Min + rand.Float32()*(Position_Random_Max - Position_Random_Min)
 }
 
-func NewPosition(id uint16, valueType PositionType) *Position {
+func NewPosition(valueType PositionType) *Position {
   return &Position{
-    id: id,
     valueType: valueType,
     values: [14]float32{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
   }
 }
 
-func NewRandomPosition(id uint16, valueType PositionType) *Position {
+func NewRandomPosition(valueType PositionType) *Position {
   return &Position{
-    id: id,
     valueType: valueType,
     values: [14]float32{
       randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(), randomPositionValue(),
@@ -55,34 +52,30 @@ func NewRandomPosition(id uint16, valueType PositionType) *Position {
 }
 
 func (p Position) MarshalJSON() ([]byte, error) {
-  data := [16]interface{}{}
-  data[0] = p.id
-  data[1] = p.valueType
+  data := [15]interface{}{}
+  data[0] = p.valueType
   for i, v := range p.values {
-    data[i + 2] = v
+    data[i + 1] = v
   }
 
-  return json.Marshal([7]interface{}{p.id, p.A1, p.A2, p.A3, p.A4, p.A5, p.A6})
+  return json.Marshal(
+    [15]interface{}{data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14]},
+  )
 }
 
 func (p *Position) UnmarshalJSON(input []byte) error {
-  var data [16]interface{}
+  var data [15]interface{}
   if err := json.Unmarshal(input, &data); err != nil {
     return err
   }
 
-  p.id        = uint16(data[0].(float64))
-  p.valueType = PositionType(data[1].(float64))
+  p.valueType = PositionType(data[0].(float64))
 
   for i := 0; i < 14; i++ {
-    p.values[i] = float32(data[i + 2].(float64))
+    p.values[i] = float32(data[i + 1].(float64))
   }
 
   return nil
-}
-
-func (p *Position) Id() uint16 {
-  return p.id
 }
 
 func (p *Position) Type() PositionType {
@@ -379,16 +372,16 @@ func (p *Position) EqualFull(x *Position, tolerance float32) bool {
 }
 
 func (p *Position) WithOffset(offset *Position) *Position {
-  position := NewPosition(p.Id(), p.Type())
-  for i := 1; i < 14; i++ {
+  position := NewPosition(p.Type())
+  for i := 0; i < 14; i++ {
     position.Set(i, p.values[i] - offset.Get(i))
   }
   return position
 }
 
 func (p *Position) Clone() *Position {
-  position := NewPosition(p.Id(), p.Type())
-  for i := 1; i < 14; i++ {
+  position := NewPosition(p.Type())
+  for i := 0; i < 14; i++ {
     position.Set(i, p.values[i])
   }
   return position

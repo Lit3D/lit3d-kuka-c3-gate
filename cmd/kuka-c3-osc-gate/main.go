@@ -26,7 +26,7 @@ var (
   logPath  = filepath.Join(os.TempDir(), execName + ".log")
 )
 
-func cli() (verboseFlag bool, oscAddr net.UDPAddr, configFile string, appPort PortValue, botInit uint) {
+func cli() (verboseFlag bool, oscAddr net.UDPAddr, configFile string, appPort PortValue, botInit uint, emulateC3 bool) {
 	var printHelp bool
   var printVersion bool
   flag.BoolVar(&printHelp, "help", false, "Print help and usage information")
@@ -42,6 +42,8 @@ func cli() (verboseFlag bool, oscAddr net.UDPAddr, configFile string, appPort Po
   flag.Var(&appPort, "app", "App listening port")
 
   flag.UintVar(&botInit, "i", 0, "Bots config init with bot count")
+
+  flag.BoolVar(&emulateC3, "e", false, "Emolate C3 Server")
 
   configFile = filepath.Clean(*flag.String("cfg", defaultConfig, "Config file"))
 
@@ -69,7 +71,7 @@ func cli() (verboseFlag bool, oscAddr net.UDPAddr, configFile string, appPort Po
 }
 
 func main() {
-	verboseFlag, oscAddr, configFile, appPort, botInit := cli()
+  verboseFlag, oscAddr, configFile, appPort, botInit, emulateC3 := cli()
 
   if botInit > 0 {
     if err := botsConfigInit(configFile, int(botInit)); err != nil {
@@ -95,6 +97,12 @@ func main() {
   	log.Fatalf("[FATAL] BotTeam read error: %v\n", err)
   }
 
+  if emulateC3 == true {
+    if err := botsTeam.EmulateC3Servers(); err != nil {
+      log.Fatalf("[FATAL] BotTeam C3 Emulators init error: %v\n", err)
+    }
+  }
+
   oscServer := NewOSCServer(oscAddr)
   if err := oscServer.ListenAndServe(); err != nil {
     log.Fatalf("[FATAL] OSC Server start error: %v\n", err)
@@ -106,7 +114,7 @@ func main() {
 
   var app *Service = nil
   if appPort != PortValue_NIL {
-    app = NewService(appPort)
+    app = NewService(appPort, botsTeam)
     if err := app.ListenAndServe(); err != nil {
       log.Fatalf("[FATAL] App Server start error: %v\n", err)
     }

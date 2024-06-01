@@ -11,6 +11,8 @@ import (
 
 const (
   Team_PacketsBuffer = 512
+
+  Team_C3Emelate_StartPort = 7001
 )
 
 type Team struct {
@@ -29,6 +31,8 @@ type Team struct {
 
   isShutdown bool
   wg sync.WaitGroup
+
+  c3EmelateList []*C3Emelate
 }
 
 func NewTeam(filePath string) *Team {
@@ -36,6 +40,18 @@ func NewTeam(filePath string) *Team {
     filePath: filePath,
     Bots:     make([]*Bot, 0),
   }
+}
+
+func (team *Team) EmulateC3Servers() error {
+  team.c3EmelateList = make([]*C3Emelate, len(team.Bots))
+  for i := range team.c3EmelateList {
+    c3Emelate := NewC3Emelate(uint16(Team_C3Emelate_StartPort + i))
+    if err := c3Emelate.ListenAndServe(); err != nil {
+      return err
+    }
+    team.c3EmelateList[i] = c3Emelate
+  }
+  return nil
 }
 
 func (team *Team) Up(oscServer *OSCServer) (err error) {
@@ -50,9 +66,14 @@ func (team *Team) Up(oscServer *OSCServer) (err error) {
     team.oscClient = nil
   }
 
-  for _, bot := range team.Bots {
+  for i, bot := range team.Bots {
     if bot.OSCResponseAddress == nil && team.OSCResponseAddress != nil {
       bot.OSCResponseAddress = team.OSCResponseAddress
+    }
+
+    c3Emelate := team.c3EmelateList[i]
+    if c3Emelate != nil {
+      bot.Address = c3Emelate.Address()
     }
     
     if err := bot.Up(); err != nil {
@@ -73,11 +94,21 @@ func (team *Team) Up(oscServer *OSCServer) (err error) {
 func (team *Team) Shutdown() error {
   team.isShutdown = true
   close(team.oscInput)
-  team.oscClient.Shutdown()
+  if team.oscClient != nil {
+    team.oscClient.Shutdown()
+  }
 
   for _, bot := range team.Bots {
     if err := bot.Shutdown(); err != nil {
       return fmt.Errorf("Bot %s Down failed with error %v\n", bot.Name, err)
+    }
+  }
+
+  for i, c3Emelate := range team.c3EmelateList {
+    if c3Emelate != nil {
+      if err := c3Emelate.Shutdown(); err != nil {
+        return fmt.Errorf("C3Emulate %d down failed with error %v\n", i, err)
+      }
     }
   }
 
@@ -103,6 +134,8 @@ func (team *Team) Read() error {
   if err = jsonDecoder.Decode(team); err != nil {
     return fmt.Errorf("Team [%s] decode JSON error: %w", team.filePath, err)
   }
+
+  team.c3EmelateList = make([]*C3Emelate, len(team.Bots))
 
   return nil
 }
@@ -149,10 +182,10 @@ func (team *Team) processOSCPosition(oscPacket *OSCPacket) {
     return
   }
 
-  var positionId uint16 = uint16(values[0].(int32))
+  var id uint16 = uint16(values[0].(int32))
   var index int32 = values[1].(int32)
 
-  go func(index int32, positionId uint16) {
+  go func(index int32, id uint16) {
 
     var wg sync.WaitGroup
     errorChan := make(chan error, len(team.Bots))
@@ -160,20 +193,21 @@ func (team *Team) processOSCPosition(oscPacket *OSCPacket) {
     
     for _, bot := range team.Bots {
       wg.Add(1)
-      go func(bot *Bot, positionId uint16) {
+      go func(bot *Bot, id uint16) {
         defer wg.Done()
 
-        position, err := bot.GetPosition(positionId)
-        if err != nil {
-          errorChan <- err
+        moveGroup := bot.GetMoveGroup(id)
+        if moveGroup == nil {
+          log.Printf("[BotTeam WARNING] Bot %s OSC MoveGroup %d is not found\n", bot.Name, id)
+          return
         }
 
-        if isBreak, err := bot.Move(position); err != nil {
-          log.Printf("[BotTeam ERROR] Bot %s OSC Position %d:%s move error: %v\n", bot.Name, position.Id(), position.Value(), err)
+        if isBreak, err := bot.MoveRound(moveGroup); err != nil {
+          log.Printf("[BotTeam ERROR] Bot %s OSC Position error: %v\n", bot.Name, err)
           errorChan <- err
           breakChan <- isBreak
         }
-      }(bot, positionId)
+      }(bot, id)
     }
 
     wg.Wait()
@@ -189,16 +223,16 @@ func (team *Team) processOSCPosition(oscPacket *OSCPacket) {
              break loop
           }
         }
-        if err := team.oscResponsePosition(status, index, positionId); err != nil {
+        if err := team.oscResponsePosition(status, index, id); err != nil {
           log.Printf("[BotTeam ERROR] OSC error move response error %v\n", err)
         }
       }
     }
 
-    if err := team.oscResponsePosition(OSCOutputStatus_OK, index, positionId); err != nil {
+    if err := team.oscResponsePosition(OSCOutputStatus_OK, index, id); err != nil {
       log.Printf("[Bot ERROR] OSC sucess move response error %v\n", err)
     }
-  }(index, positionId)
+  }(index, id)
 }
 
 func (team *Team) oscResponsePosition(status OSCOutputStatus, index int32, positionId uint16) error {
@@ -211,4 +245,12 @@ func (team *Team) oscResponsePosition(status OSCOutputStatus, index int32, posit
   }
 
   return team.oscClient.ResponsePosition(*team.OSCResponsePosition, status, index, positionId)
+}
+
+func (team *Team) GetAppData() []*BotApp {
+  teamAppData := make([]*BotApp, len(team.Bots))
+  for i, bot := range team.Bots {
+    teamAppData[i] = bot.GetAppData()
+  }
+  return teamAppData
 }

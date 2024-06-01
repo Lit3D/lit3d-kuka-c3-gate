@@ -1,0 +1,50 @@
+.box {
+  --border-color: rgb(255 255 255 / .3);
+  --border-thick: 1px;
+  --border-size: calc(100% - var(--border-gap) * 2);
+  --border-gap: calc(var(--border-corner-size) + var(--border-corner-gap));
+  
+  --border-corner-color: rgb(255 255 255 / .75);
+  --border-corner-thick: calc(var(--border-thick) * 1.618);
+  --border-corner-size: 10px;
+  --border-corner-gap: calc(var(--border-corner-size) / 2);
+
+  --border-corner-lines:
+      var(--border-corner-color) 0, var(--border-corner-color) var(--border-corner-thick),
+      transparent var(--border-corner-thick), transparent calc(100% - var(--border-corner-thick)),
+      var(--border-corner-color) calc(100% - var(--border-corner-thick)), var(--border-corner-color) 100%;
+
+  --border-lines:
+      var(--border-color) 0, var(--border-color) var(--border-thick),
+      transparent var(--border-thick), transparent calc(100% - var(--border-thick)),
+      var(--border-color) calc(100% - var(--border-thick)), var(--border-color) 100%;
+
+  background-image:
+    linear-gradient(0deg, var(--border-corner-lines)),
+    linear-gradient(0deg, var(--border-corner-lines)),
+    linear-gradient(90deg, var(--border-corner-lines)),
+    linear-gradient(90deg, var(--border-corner-lines)),
+    linear-gradient(0deg, var(--border-lines)),
+    linear-gradient(90deg, var(--border-lines));
+
+  background-size:
+    var(--border-corner-size) 100%,
+    var(--border-corner-size) 100%,
+    100% calc(var(--border-corner-size) - var(--border-corner-thick)),
+    100% calc(var(--border-corner-size) - var(--border-corner-thick)),
+    var(--border-size) 100%,
+    100% var(--border-size);
+  
+  background-position:
+    left center,
+    right center,
+    left top var(--border-corner-thick),
+    left bottom var(--border-corner-thick),
+    left var(--border-gap) center,
+    left top var(--border-gap);
+
+  background-repeat: no-repeat;
+  background-origin: border-box;
+
+  border: var(--border-thick) solid transparent;
+}

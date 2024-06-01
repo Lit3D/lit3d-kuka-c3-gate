@@ -103,34 +103,63 @@ func (osc *OSCClient) Shutdown() {
 func (osc *OSCClient) ResponseAxis(path string, position *Position) error {
   oscPacker := NewOSCPacket()
   oscPacker.Path = path
-  oscPacker.Append(position.A1)
-  oscPacker.Append(position.A2)
-  oscPacker.Append(position.A3)
-  oscPacker.Append(position.A4)
-  oscPacker.Append(position.A5)
-  oscPacker.Append(position.A6)
+  if err := oscPacker.Append(position.A1(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A2(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A3(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A4(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A5(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A6(nil)); err != nil {
+    return err
+  }
   return osc.Send(oscPacker)
 }
 
 func (osc *OSCClient) ResponseCoords(path string, position *Position) error {
   oscPacker := NewOSCPacket()
   oscPacker.Path = path
-  oscPacker.Append(position.X)
-  oscPacker.Append(position.Y)
-  oscPacker.Append(position.Z)
-  oscPacker.Append(position.A)
-  oscPacker.Append(position.B)
-  oscPacker.Append(position.C)
-  // oscPacker.Append(position.S)
-  // oscPacker.Append(position.T)
+  
+  if err := oscPacker.Append(position.X(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.Y(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.Z(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.A(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.B(nil)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(position.C(nil)); err != nil {
+    return err
+  }
   return osc.Send(oscPacker)
 }
 
 func (osc *OSCClient) ResponsePosition(path string, status OSCOutputStatus, index int32, positionId uint16) error {
   oscPacker := NewOSCPacket()
   oscPacker.Path = path
-  oscPacker.Append(int32(status))
-  oscPacker.Append(int32(index))
-  oscPacker.Append(int32(positionId))
+  if err := oscPacker.Append(int32(status)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(int32(index)); err != nil {
+    return err
+  }
+  if err := oscPacker.Append(int32(positionId)); err != nil {
+    return err
+  }
   return osc.Send(oscPacker)
 }

@@ -12,9 +12,6 @@ import (
 )
 
 const (
-  C3Emelate_Address = "127.0.0.1"
-  C3Emelate_Port    = "7000"
-
   C3Emelate_TCPBuffer = 2048
 
   C3Emelat_EndTimeout = 5 * time.Second
@@ -46,28 +43,32 @@ type C3Emelate struct {
   wg           sync.WaitGroup
 }
 
-func NewC3Emelate() *C3Emelate {
+func NewC3Emelate(port uint16) *C3Emelate {
   return &C3Emelate{
-    AXIS_ACT:   NewPosition(0xFFFF, PositionType_E6AXIS),
-    POS_ACT:    NewRandomPosition(0xFFFF, PositionType_E6POS),
+    AXIS_ACT:   NewPosition(PositionType_E6AXIS),
+    POS_ACT:    NewRandomPosition(PositionType_E6POS),
     
     COM_ACTION: C3Variable_COM_ACTION_EMPTY,
     COM_ROUNDM: C3Variable_COM_ROUNDM_NONE,
-    COM_E6AXIS: NewPosition(0xFFFF, PositionType_E6AXIS),
-    COM_E6POS:  NewPosition(0xFFFF, PositionType_E6POS),
+    COM_E6AXIS: NewPosition(PositionType_E6AXIS),
+    COM_E6POS:  NewPosition(PositionType_E6POS),
 
-    POSITION:   NewPosition(0xFFFF, PositionType_E6POS),
+    POSITION:   NewPosition(PositionType_E6POS),
     
     PROXY_TYPE:     "C3 Server Emulator",
     PROXY_VERSION:  "1.0.0",
     PROXY_HOSTNAME: "localhost",
     PROXY_ADDRESS:  "127.0.0.1",
-    PROXY_PORT:     "7000",
+    PROXY_PORT:     fmt.Sprintf("%d", port),
   }
 }
 
+func (c3 *C3Emelate) Address() string {
+  return fmt.Sprintf("%s:%s", c3.PROXY_ADDRESS, c3.PROXY_PORT)
+}
+
 func (c3 *C3Emelate) ListenAndServe() error {
-  tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", c3.PROXY_ADDRESS, c3.PROXY_PORT))
+  tcpAddr, err := net.ResolveTCPAddr("tcp4", c3.Address())
   if err != nil {
     return err
   }
@@ -141,14 +142,17 @@ func (c3 *C3Emelate) handleConnection(conn net.Conn) {
       log.Printf("[C3Emelate ERROR] Failed to read request: %v\n", err)
       break
     }
-    message := make([]byte, n)
-    copy(message, buffer[:n])
+    requestMessage := make([]byte, n)
+    copy(requestMessage, buffer[:n])
+    // log.Printf("[C3Emelate INFO] <- %s", C3EmelateDumpMessage(requestMessage))
 
-    responseMessage, err := c3.processMessage(message)
+    responseMessage, err := c3.processMessage(requestMessage)
     if err != nil {
       log.Printf("[C3Emelate ERROR] Process message error: %v\n", err)
       break
     }
+
+    // log.Printf("[C3Emelate INFO] -> %s", C3EmelateDumpMessage(responseMessage))
 
     if _, err := conn.Write(responseMessage); err != nil {
       log.Printf("[C3Emelate ERROR] Failed to write response: %v\n", err)
@@ -245,6 +249,8 @@ func (c3 *C3Emelate) processMessage(request []byte) ([]byte, error) {
           c3Error = C3Message_Error_NotImplemented
       }
       c3.variableMux.Unlock()
+
+      // log.Printf("[C3Emelate INFO] %s <- %s", variableName, variableValue)
     }
 
     var variableValue string
@@ -276,6 +282,8 @@ func (c3 *C3Emelate) processMessage(request []byte) ([]byte, error) {
         c3Error = C3Message_Error_NotImplemented
     }
     c3.variableMux.RUnlock()
+
+    // log.Printf("[C3Emelate INFO] %s -> %s", variableName, variableValue)
 
     // Encode VariableValue
     encodedValue := utf16.Encode([]rune(variableValue))
@@ -366,6 +374,8 @@ func (c3 *C3Emelate) processMessage(request []byte) ([]byte, error) {
             c3Error = C3Message_Error_NotImplemented
         }
         c3.variableMux.Unlock()
+
+        // log.Printf("[C3Emelate INFO] %s <- %s", variableName, variableValue)
       }
 
       var variableValue string
@@ -398,8 +408,15 @@ func (c3 *C3Emelate) processMessage(request []byte) ([]byte, error) {
       }
       c3.variableMux.RUnlock()
 
+       // log.Printf("[C3Emelate INFO] %s -> %s", variableName, variableValue)
+
       // Write ErrorCode (BigEndian)
-      if err := binary.Write(&responseBuffer, binary.BigEndian, c3Error); err != nil {
+      // if err := binary.Write(&responseBuffer, binary.BigEndian, c3Error); err != nil {
+      //   return nil, fmt.Errorf("Write ErrorCode error: %w", err)
+      // }
+
+      // Write ErrorCode (Byte)
+      if err := responseBuffer.WriteByte(byte(c3Error)); err != nil {
         return nil, fmt.Errorf("Write ErrorCode error: %w", err)
       }
 
@@ -439,5 +456,3 @@ func (c3 *C3Emelate) processMessage(request []byte) ([]byte, error) {
 
   return buf, nil
 }
-
-

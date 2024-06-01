@@ -15,7 +15,7 @@ const (
   Bot_C3_Request_Timeout = 3 * time.Second
 
   Bot_Position_Tolerance = 0.0100
-  Bot_Position_ReadySteps = 5
+  Bot_Position_ReadySteps = 10
 
   Bot_Move_Timeout = 30 * time.Second
 )
@@ -34,9 +34,11 @@ type Bot struct {
   OSCResponseCoords   *string `json:"oscResponseCoords"`
   OSCResponsePosition *string `json:"oscResponsPosition"`
 
-  Positions []*Position `json:"positions"`
+  MoveGroups []*MoveGroup `json:"moveGroups"`
+  moveGroupsMux sync.RWMutex
 
-  oscInput chan *OSCPacket
+  oscInput  chan *OSCPacket
+  moveInput chan *MoveGroup
 
   tagId    uint16
   tagIdMux sync.RWMutex
@@ -47,15 +49,13 @@ type Bot struct {
   isMovement bool
   isMovementMux sync.RWMutex
 
-  c3AXIS_ACT    *Position
-  c3POS_ACT     *Position
-  c3COM_ACTION  C3VariableComActionValues
-  c3COM_ROUNDM  C3VariableComRoundmValues
-  c3POSITION    *Position
+  c3AXIS_ACT   *Position
+  c3POS_ACT    *Position
+  c3COM_ACTION C3VariableComActionValues
+  c3COM_ROUNDM C3VariableComRoundmValues
+  c3OFFSET     *Position
+  c3POSITION   *Position
   positionMux sync.RWMutex
-
-  c3OFFSET    *Position
-  offsetMux sync.RWMutex
 
   c3PROXY_TYPE     string
   c3PROXY_VERSION  string
@@ -71,13 +71,13 @@ type Bot struct {
 func NewBot() (*Bot, error) {
   return &Bot{
     tagId:        1,
-    c3AXIS_ACT:   NewPosition(0xFFFF, PositionType_E6AXIS),
-    c3POS_ACT:    NewPosition(0xFFFF, PositionType_E6POS),
-    c3POSITION:   NewPosition(0xFFFF, PositionType_E6POS),
-    c3OFFSET:     NewPosition(0xFFFF, PositionType_E6POS),
+    c3AXIS_ACT:   NewPosition(PositionType_E6AXIS),
+    c3POS_ACT:    NewPosition(PositionType_E6POS),
+    c3POSITION:   NewPosition(PositionType_E6POS),
+    c3OFFSET:     NewPosition(PositionType_E6POS),
     c3COM_ACTION: C3Variable_COM_ACTION_EMPTY,
     c3COM_ROUNDM: C3Variable_COM_ROUNDM_NONE,
-    Positions:    make([]*Position, 0),
+    MoveGroups:   make([]*MoveGroup, 0),
   }, nil
 }
 
@@ -103,20 +103,20 @@ func (bot *Bot) UnmarshalJSON(data []byte) error {
   }
 
   bot.tagId        = 1
-  bot.c3AXIS_ACT   = NewPosition(0xFFFF, PositionType_E6AXIS)
-  bot.c3POS_ACT    = NewPosition(0xFFFF, PositionType_E6POS)
-  bot.c3POSITION   = NewPosition(0xFFFF, PositionType_E6POS)
-  bot.c3OFFSET     = NewPosition(0xFFFF, PositionType_E6POS)
+  bot.c3AXIS_ACT   = NewPosition(PositionType_E6AXIS)
+  bot.c3POS_ACT    = NewPosition(PositionType_E6POS)
+  bot.c3POSITION   = NewPosition(PositionType_E6POS)
+  bot.c3OFFSET     = NewPosition(PositionType_E6POS)
   bot.c3COM_ACTION = C3Variable_COM_ACTION_EMPTY
   bot.c3COM_ROUNDM = C3Variable_COM_ROUNDM_NONE
-  bot.Positions    = make([]*Position, 0)
   return nil
 }
 
 func (bot *Bot) Up() (err error) {
   bot.oscInput = make(chan *OSCPacket, Bot_PacketsBuffer)
+  bot.moveInput = make(chan *MoveGroup, Bot_PacketsBuffer)
   bot.isShutdown = false
-  
+
   if bot.c3Client, err = NewC3Client(bot.Address); err != nil {
     return fmt.Errorf("C3Client creation error: %w", err)
   }
@@ -137,14 +137,17 @@ func (bot *Bot) Up() (err error) {
     return fmt.Errorf("Position update error: %w", err)
   }
 
-  if err := bot.UpdateOffset(); err != nil {
-    return fmt.Errorf("Offset update error: %w", err)
+  if err := bot.ResetOffsetAndPosition(); err != nil {
+    return fmt.Errorf("Offset and Position update error: %w", err)
   }
 
   bot.LogBot()
 
   bot.wg.Add(1)
   go bot.processOSCPackets()
+
+  bot.wg.Add(1)
+  go bot.processMoveGroup()
 
   bot.wg.Add(1)
   go bot.processUpdatePosition()
@@ -155,7 +158,10 @@ func (bot *Bot) Up() (err error) {
 func (bot *Bot) Shutdown() error {
   bot.isShutdown = true
   close(bot.oscInput)
-  bot.oscClient.Shutdown()
+  close(bot.moveInput)
+  if bot.oscClient != nil {
+    bot.oscClient.Shutdown()
+  }
   bot.c3Client.Shutdown()
   bot.wg.Wait()
   log.Printf("[Bot INFO] Shutdown successfully\n")
@@ -171,12 +177,11 @@ func (bot *Bot) LogBot() {
   defer bot.isMovementMux.RUnlock()
   bot.tagIdMux.RLock()
   defer bot.tagIdMux.RUnlock()
-  bot.offsetMux.RLock()
-  defer bot.offsetMux.RUnlock()
+
   log.Printf(
     "==========> Bot: %s[%s]\n" +
-    "AxisPath: %v CoordsPath: %v PositionPath: %v\n" + 
-    "ResponseAddress: %v ResponseAxes: %v ResponseCoords: %v ResponsePosition: %v\n" +
+    "AxisPath: %s CoordsPath: %s PositionPath: %s\n" + 
+    "ResponseAddress: %s ResponseAxes: %s ResponseCoords: %s ResponsePosition: %s\n" +
     "ProxyType: %s ProxyVersion: %s ProxyHost: %s ProxyAddress: %s ProxyPort: %s\n" +
     "AXIS_ACT: %s\n" +
     "POS_ACT: %s\n" +
@@ -184,8 +189,8 @@ func (bot *Bot) LogBot() {
     "POSITION: %s\n" +
     "COM_ACTION: %s COM_ROUNDM: %s isMovement: %t tagId: %d",
     bot.Name, bot.Address,
-    bot.OSCRequestAxis, bot.OSCRequestCoords, bot.OSCRequestPosition,
-    bot.OSCResponseAddress, bot.OSCResponseAxes, bot.OSCResponseCoords, bot.OSCResponsePosition, 
+    nilStringToString(bot.OSCRequestAxis), nilStringToString(bot.OSCRequestCoords), nilStringToString(bot.OSCRequestPosition),
+    nilStringToString(bot.OSCResponseAddress), nilStringToString(bot.OSCResponseAxes), nilStringToString(bot.OSCResponseCoords), nilStringToString(bot.OSCResponsePosition), 
     bot.c3PROXY_TYPE, bot.c3PROXY_VERSION, bot.c3PROXY_HOSTNAME, bot.c3PROXY_ADDRESS, bot.c3PROXY_PORT,
     bot.c3AXIS_ACT.ValueFull(),
     bot.c3POS_ACT.ValueFull(),
@@ -210,22 +215,27 @@ func (bot *Bot) nextTagId() uint16 {
 }
 
 func (bot *Bot) Move(p *Position) (bool, error) {
-  bot.isMovementMux.Lock()
-  defer bot.isMovementMux.Unlock()
-
+  bot.isMovementMux.RLock()
   if bot.isMovement == true {
+    bot.isMovementMux.RUnlock()
     return false, fmt.Errorf("Bot already movement")
   }
+  bot.isMovementMux.RUnlock()
 
-  requestPositionVariable := make(map[C3VariableType]*string)
+  requestPositionVariable  := make(map[C3VariableType]*string)
+  requestComActionVariable := make(map[C3VariableType]*string)
   
   positionType  := p.Type()
   positionValue := p.Value()
 
   if positionType == PositionType_E6AXIS {
     requestPositionVariable[C3Variable_COM_E6AXIS] = &positionValue
+    comActionValue := string(C3Variable_COM_ACTION_E6AXIS)
+    requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
   } else if positionType == PositionType_E6POS {
     requestPositionVariable[C3Variable_COM_E6POS] = &positionValue
+    comActionValue := string(C3Variable_COM_ACTION_E6POS)
+    requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
   } else {
     return false, fmt.Errorf("Incorrect Move position type of %d", positionType)
   }
@@ -237,10 +247,6 @@ func (bot *Bot) Move(p *Position) (bool, error) {
   if err != nil {
     return false, fmt.Errorf("Move new Position message error: %w", err)
   }
-
-  requestComActionVariable := make(map[C3VariableType]*string)
-  comActionValue := string(C3Variable_COM_ROUNDM_NONE)
-  requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
 
   comActionMessage, err := NewC3Message(bot.nextTagId(), requestComActionVariable)
   if err != nil {
@@ -277,7 +283,9 @@ func (bot *Bot) Move(p *Position) (bool, error) {
       return false, fmt.Errorf("Move COM_ACTION message request timeout")
   }
 
+  bot.isMovementMux.Lock()
   bot.isMovement = true
+  bot.isMovementMux.Unlock()
   log.Printf("[Bot INFO] Move bot to position %s\n", p.Value())
   
   var readyFlag uint8 = 0
@@ -286,19 +294,34 @@ func (bot *Bot) Move(p *Position) (bool, error) {
   loop: for {
     select {
       case <-timeout:
+        bot.isMovementMux.Lock()
         bot.isMovement = false
+        bot.isMovementMux.Unlock()
         return true, fmt.Errorf("Move timeout break")
       
       default:
-        // if bot.UpdatePosition(); err != nil {
-        //   log.Printf("[Bot ERROR] Move Get position error %v\n", err)
-        // }
-
-        bot.positionMux.RLock()
-        if bot.c3POSITION.Equal(p, Bot_Position_Tolerance) {
-          readyFlag++
+        switch p.Type() {
+          case PositionType_E6AXIS:
+            bot.positionMux.RLock()
+            if bot.c3AXIS_ACT.Equal(p, Bot_Position_Tolerance) {
+              readyFlag++
+            }
+            bot.positionMux.RUnlock()
+          
+          case PositionType_E6POS:
+            bot.positionMux.RLock()
+            if bot.c3POSITION.Equal(p, Bot_Position_Tolerance) {
+              readyFlag++
+            }
+            bot.positionMux.RUnlock()
+          
+          default:
+            log.Printf("[Bot WARNINT] Incorrect move position: %s\n", p.Value())
+            bot.isMovementMux.Lock()
+            bot.isMovement = false
+            bot.isMovementMux.Unlock()
+            return true, fmt.Errorf("Incorrect move position")
         }
-        bot.positionMux.RUnlock()
 
         if readyFlag >= Bot_Position_ReadySteps {
           break loop
@@ -307,7 +330,9 @@ func (bot *Bot) Move(p *Position) (bool, error) {
   }
 
   log.Printf("[Bot INFO] Move ready position %s\n", p.Value())
+  bot.isMovementMux.Lock()
   bot.isMovement = false
+  bot.isMovementMux.Unlock()
   return false, nil
 }
 
@@ -339,8 +364,8 @@ func (bot *Bot) UpdatePosition() error {
       return fmt.Errorf("Get Position message request timeout")
   }
 
-  var AXIS_ACT *Position = NewPosition(0xFFFF, PositionType_NIL)
-  var POS_ACT *Position = NewPosition(0xFFFF, PositionType_NIL)
+  var AXIS_ACT *Position = NewPosition(PositionType_NIL)
+  var POS_ACT *Position = NewPosition(PositionType_NIL)
   var COM_ACTION C3VariableComActionValues = C3Variable_COM_ACTION_EMPTY
   var COM_ROUNDM C3VariableComRoundmValues = C3Variable_COM_ROUNDM_NONE
 
@@ -373,20 +398,17 @@ func (bot *Bot) UpdatePosition() error {
   bot.c3POS_ACT = POS_ACT
   bot.c3COM_ACTION = COM_ACTION
   bot.c3COM_ROUNDM = COM_ROUNDM
-  bot.offsetMux.RUnlock()
   bot.c3POSITION = POS_ACT.WithOffset(bot.c3OFFSET)
-  bot.offsetMux.RUnlock()
   bot.positionMux.Unlock()
 
   return nil
 }
 
-func (bot *Bot) UpdateOffset() error {
-  bot.positionMux.RLock()
-  defer bot.positionMux.RUnlock()
-  bot.offsetMux.Lock()
-  defer bot.offsetMux.Unlock()
+func (bot *Bot) ResetOffsetAndPosition() error {
+  bot.positionMux.Lock()
+  defer bot.positionMux.Unlock()
   bot.c3OFFSET = bot.c3POS_ACT.Clone()
+  bot.c3POSITION = NewPosition(PositionType_E6POS)
   return nil
 }
 
@@ -499,7 +521,7 @@ func (bot *Bot) processOSCAxis(oscPacket *OSCPacket) {
     return
   }
 
-  position := NewPosition(0xFFFF, PositionType_E6AXIS)
+  position := NewPosition(PositionType_E6AXIS)
   for i, value := range values {
     switch value.(type) {
       case float32:
@@ -524,7 +546,7 @@ func (bot *Bot) processOSCCoords(oscPacket *OSCPacket) {
     return
   }
 
-  position := NewPosition(0xFFFF, PositionType_E6POS)
+  position := NewPosition(PositionType_E6POS)
   for i, value := range values {
     switch value.(type) {
       case float32:
@@ -542,19 +564,58 @@ func (bot *Bot) processOSCCoords(oscPacket *OSCPacket) {
   }(position)
 }
 
-func (bot *Bot) GetPosition(positionId uint16) (*Position, error) {
-  var position *Position = nil
-  for _, position = range bot.Positions {
-    if position.Id() == positionId {
+func (bot *Bot) GetMoveGroup(id uint16) *MoveGroup {
+  bot.moveGroupsMux.RLock()
+  defer bot.moveGroupsMux.RLock()
+  
+  var moveGroup *MoveGroup = nil
+  for _, moveGroup = range bot.MoveGroups {
+    if moveGroup.Id == id {
       break
     }
   }
-  
-  if position == nil {
-    return nil, fmt.Errorf("Incorrect OSC Position id of %d", positionId)
+
+  return moveGroup
+}
+
+func (bot *Bot) MoveRound(moveGroup *MoveGroup) (bool, error) {
+  for _, position := range moveGroup.Positions {
+    if isBreak, err := bot.Move(position); err != nil {
+      return isBreak, fmt.Errorf("MoveGroup %d Position %s move error: %w", moveGroup.Id, position.Value(), err)
+    }
   }
 
-  return position, nil
+  return false, nil
+}
+
+func (bot *Bot) processMoveGroup() {
+  defer bot.wg.Done()
+  
+  for moveGroup := range bot.moveInput {
+    log.Printf("[Service INFO] Process MoveGroup %d start\n", moveGroup.Id)
+
+    if bot.isMovement == true {
+      log.Printf("[Service ERROR] Process MoveGroup %d skip, bot is Movement\n", moveGroup.Id)
+      continue
+    }
+
+    if isBreak, err := bot.MoveRound(moveGroup); err != nil {
+      log.Printf("[Service ERROR] Process MoveGroup %d error: %v with break %v\n", moveGroup.Id, err, isBreak)
+      continue
+    }
+
+    log.Printf("[Service INFO] Process MoveGroup %d sucessful\n", moveGroup.Id)
+  }
+}
+
+func (bot *Bot) RunMoveGroup(id uint16) error {
+  moveGroup := bot.GetMoveGroup(id)
+  if moveGroup == nil {
+    return fmt.Errorf("MoveGroup %d in not found", id)
+  }
+
+  bot.moveInput <- moveGroup
+  return nil
 }
 
 func (bot *Bot) processOSCPosition(oscPacket *OSCPacket) {
@@ -564,35 +625,36 @@ func (bot *Bot) processOSCPosition(oscPacket *OSCPacket) {
     return
   }
   
-  var positionId uint16 = uint16(values[0].(int32))
+  var id uint16 = uint16(values[0].(int32))
   var index int32 = values[1].(int32)
 
-  position, err := bot.GetPosition(positionId)
-  if err != nil {
-    log.Printf("[Bot ERROR] %v\n", err)
+  moveGroup := bot.GetMoveGroup(id)
+  if moveGroup == nil {
+    log.Printf("[Bot ERROR] OSC MoveGroup %d in not found\n", id)
     go func() {
-      if err := bot.oscResponsePosition(OSCOutputStatus_Error, index, positionId); err != nil {
+      if err := bot.oscResponsePosition(OSCOutputStatus_Error, index, id); err != nil {
         log.Printf("[Bot ERROR] OSC Response error %v\n", err)
       }
     }()
     return
   }
 
-  go func(index int32, position *Position) {
-    if isBreak, err := bot.Move(position); err != nil {
-      log.Printf("[Bot ERROR] OSC Position %d:%s move error: %v\n", position.Id(), position.Value(), err)
+  go func(index int32, moveGroup *MoveGroup) {
+    if isBreak, err := bot.MoveRound(moveGroup); err != nil {
+      log.Printf("[Bot ERROR] OSC Process position error: %v\n", err)
       status := OSCOutputStatus_Error
       if isBreak == true {
         status = OSCOutputStatus_Break
       }
-      if err := bot.oscResponsePosition(status, index, position.Id()); err != nil {
+      if err := bot.oscResponsePosition(status, index, moveGroup.Id); err != nil {
         log.Printf("[Bot ERROR] OSC error move response error %v\n", err)
       }
     }
-    if err := bot.oscResponsePosition(OSCOutputStatus_OK, index, position.Id()); err != nil {
+
+    if err := bot.oscResponsePosition(OSCOutputStatus_OK, index, moveGroup.Id); err != nil {
       log.Printf("[Bot ERROR] OSC sucess move response error %v\n", err)
     }
-  }(index, position)
+  }(index, moveGroup)
 }
 
 func (bot *Bot) oscResponseAxis(position *Position) error {
@@ -645,4 +707,58 @@ func (bot *Bot) oscResponsePosition(status OSCOutputStatus, index int32, positio
   return bot.oscClient.ResponsePosition(*bot.OSCResponsePosition, status, index, positionId)
 }
 
+func (bot *Bot) GetAppData() *BotApp {
+  bot.proxyMux.RLock()
+  defer bot.proxyMux.RUnlock()
+  bot.positionMux.RLock()
+  defer bot.positionMux.RUnlock()
+  bot.isMovementMux.RLock()
+  defer bot.isMovementMux.RUnlock()
+  bot.tagIdMux.RLock()
+  defer bot.tagIdMux.RUnlock()
 
+  botApp := &BotApp{
+    Name:    bot.Name,
+    Address: bot.Address,
+
+    OSCRequestAxis:      nilStringToString(bot.OSCRequestAxis),
+    OSCRequestCoords:    nilStringToString(bot.OSCRequestCoords),
+    OSCRequestPosition:  nilStringToString(bot.OSCRequestPosition),
+
+    OSCResponseAddress:  nilStringToString(bot.OSCResponseAddress),
+    OSCResponseAxes:     nilStringToString(bot.OSCResponseAxes),
+    OSCResponseCoords:   nilStringToString(bot.OSCResponseCoords),
+    OSCResponsePosition: nilStringToString(bot.OSCResponsePosition),
+
+    TagId:      bot.tagId,
+    IsMovement: bot.isMovement,
+
+    COM_ACTION: string(bot.c3COM_ACTION),
+    COM_ROUNDM: string(bot.c3COM_ROUNDM),
+
+    AXIS_ACT: bot.c3AXIS_ACT.Clone(),
+    POS_ACT:  bot.c3POS_ACT.Clone(),
+    OFFSET:   bot.c3OFFSET.Clone(),
+    POSITION: bot.c3POSITION.Clone(),
+
+    PROXY_TYPE:     bot.c3PROXY_TYPE,
+    PROXY_VERSION:  bot.c3PROXY_VERSION,
+    PROXY_HOSTNAME: bot.c3PROXY_HOSTNAME,
+    PROXY_ADDRESS:  bot.c3PROXY_ADDRESS,
+    PROXY_PORT:     bot.c3PROXY_PORT,
+  }
+
+  botApp.MoveGroups = make([]*MoveGroup, len(bot.MoveGroups))
+  for i, moveGroup := range bot.MoveGroups {
+    botApp.MoveGroups[i] = moveGroup.Clone()
+  }
+
+  return botApp
+}
+
+func nilStringToString(input *string) string {
+  if input == nil {
+    return "Ø"
+  }
+  return *input
+}
