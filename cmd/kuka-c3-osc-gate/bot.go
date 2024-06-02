@@ -584,7 +584,6 @@ func (bot *Bot) MoveRound(moveGroup *MoveGroup) (bool, error) {
       return isBreak, fmt.Errorf("MoveGroup %d Position %s move error: %w", moveGroup.Id, position.Value(), err)
     }
   }
-
   return false, nil
 }
 

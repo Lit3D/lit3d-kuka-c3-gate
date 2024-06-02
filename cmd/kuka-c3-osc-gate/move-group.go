@@ -1,8 +1,8 @@
 package main
 
 type MoveGroup struct {
-  Id        uint16      `json:"id"`
-  Positions []*Position `json:"positions"`
+  Id         uint16      `json:"id"`
+  Positions  []*Position `json:"positions"`
 }
 
 func NewMoveGroup(id uint16) *MoveGroup {
