@@ -15,9 +15,9 @@ const (
   Bot_C3_Request_Timeout = 3 * time.Second
 
   Bot_Position_Tolerance = 0.0100
-  Bot_Position_ReadySteps = 10
+  Bot_Position_ReadySteps = 100
 
-  Bot_Move_Timeout = 30 * time.Second
+  Bot_Move_Timeout = 60 * time.Second
 )
 
 type Bot struct {
@@ -66,6 +66,9 @@ type Bot struct {
 
   isShutdown bool
   wg sync.WaitGroup
+
+  currentMoveGroupId uint16
+  currentMoveGroupIdMux sync.RWMutex
 }
 
 func NewBot() (*Bot, error) {
@@ -118,27 +121,37 @@ func (bot *Bot) Up() (err error) {
   bot.isShutdown = false
 
   if bot.c3Client, err = NewC3Client(bot.Address); err != nil {
-    return fmt.Errorf("C3Client creation error: %w", err)
+    return fmt.Errorf("Bot %s C3Client creation error: %w", bot.Name, err)
   }
 
   if bot.OSCResponseAddress != nil {
     if bot.oscClient, err = NewOSCClient(*bot.OSCResponseAddress); err != nil {
-      return fmt.Errorf("OSCClient creation error: %w", err)
+      return fmt.Errorf("Bot %s OSCClient creation error: %w", bot.Name, err)
     }
   } else {
     bot.oscClient = nil
   }
 
   if err := bot.UpdateProxyInfo(); err != nil {
-    return fmt.Errorf("Proxy get info error: %w", err)
+    return fmt.Errorf("Bot %s Proxy get info error: %w", bot.Name, err)
   }
 
   if err := bot.UpdatePosition(); err != nil {
-    return fmt.Errorf("Position update error: %w", err)
+    return fmt.Errorf("Bot %s Position update error: %w", bot.Name, err)
   }
 
+  HOME := NewPosition(PositionType_E6AXIS)
+  bot.positionMux.RLock()
+  HOME.SetValues([14]float32{0, -90, 90, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+  if bot.c3AXIS_ACT.Equal(HOME, Bot_Position_Tolerance) != true {
+     return fmt.Errorf("Bot %s is not HOME position", bot.Name)
+  }
+
+  bot.positionMux.RUnlock()
+
+
   if err := bot.ResetOffsetAndPosition(); err != nil {
-    return fmt.Errorf("Offset and Position update error: %w", err)
+    return fmt.Errorf("Bot %s Offset and Position update error: %w", bot.Name, err)
   }
 
   bot.LogBot()
@@ -164,7 +177,7 @@ func (bot *Bot) Shutdown() error {
   }
   bot.c3Client.Shutdown()
   bot.wg.Wait()
-  log.Printf("[Bot INFO] Shutdown successfully\n")
+  log.Printf("[Bot %s INFO] Shutdown successfully\n", bot.Name)
   return nil
 }
 
@@ -214,6 +227,133 @@ func (bot *Bot) nextTagId() uint16 {
   return currentTagId
 }
 
+func (bot *Bot) SetSpeed(VEL_CP uint8, ACC_CP uint8) error {
+  bot.isMovementMux.RLock()
+  if bot.isMovement == true {
+    bot.isMovementMux.RUnlock()
+    return fmt.Errorf("Bot is movement")
+  }
+  bot.isMovementMux.RUnlock()
+
+  requestSpeedVariable  := make(map[C3VariableType]*string)
+  requestComActionVariable := make(map[C3VariableType]*string)
+
+  VEL_CPValue := fmt.Sprintf("%d", VEL_CP)
+  requestSpeedVariable[C3Variable_COM_VALUE1] = &VEL_CPValue
+
+  ACC_CPValue := fmt.Sprintf("%d", ACC_CP)
+  requestSpeedVariable[C3Variable_COM_VALUE3] = &ACC_CPValue
+
+  comActionValue := string(C3Variable_COM_ACTION_VEL_AXIS)
+  requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
+
+  speedMessage, err := NewC3Message(bot.nextTagId(), requestSpeedVariable)
+  if err != nil {
+    return fmt.Errorf("Speed value message error: %w", err)
+  }
+
+  comActionMessage, err := NewC3Message(bot.nextTagId(), requestComActionVariable)
+  if err != nil {
+    return fmt.Errorf("Speed COM_ACTION message error: %w", err)
+  }
+
+  resultSpeedChan, err := bot.c3Client.Request(speedMessage)
+  if err != nil {
+    return fmt.Errorf("Speed value message request error: %w", err)
+  }
+
+  resultComActionChan, err := bot.c3Client.Request(comActionMessage)
+  if err != nil {
+    return fmt.Errorf("Speed COM_ACTION message request error: %w", err)
+  }
+
+  select {
+    case speedMessage = <-resultSpeedChan:
+      err = speedMessage.Error()
+      if err != nil {
+        return fmt.Errorf("Speed value message result error: %w", err)
+      }
+    case <-time.After(Bot_C3_Request_Timeout):
+      return fmt.Errorf("Speed value message request timeout")
+  }
+
+  select {
+    case comActionMessage = <-resultComActionChan:
+      err = comActionMessage.Error()
+      if err != nil {
+        return fmt.Errorf("Speed COM_ACTION message result error: %w", err)
+      }
+    case <-time.After(Bot_C3_Request_Timeout):
+      return fmt.Errorf("Speed COM_ACTION message request timeout")
+  }
+
+  return nil
+}
+
+func (bot *Bot) SetAXISSpeed(VEL_AXIS uint8, ACC_AXIS uint8) error {
+  bot.isMovementMux.RLock()
+  if bot.isMovement == true {
+    bot.isMovementMux.RUnlock()
+    return fmt.Errorf("Bot is movement")
+  }
+  bot.isMovementMux.RUnlock()
+
+  requestSpeedVariable  := make(map[C3VariableType]*string)
+  requestComActionVariable := make(map[C3VariableType]*string)
+
+  VEL_AXISValue := fmt.Sprintf("%d", VEL_AXIS)
+  requestSpeedVariable[C3Variable_COM_VALUE2] = &VEL_AXISValue
+
+  ACC_AXISValue := fmt.Sprintf("%d", ACC_AXIS)
+  requestSpeedVariable[C3Variable_COM_VALUE4] = &ACC_AXISValue
+
+  comActionValue := string(C3Variable_COM_ACTION_VEL_AXIS)
+  requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
+
+  speedMessage, err := NewC3Message(bot.nextTagId(), requestSpeedVariable)
+  if err != nil {
+    return fmt.Errorf("AXISSpeed value message error: %w", err)
+  }
+
+  comActionMessage, err := NewC3Message(bot.nextTagId(), requestComActionVariable)
+  if err != nil {
+    return fmt.Errorf("AXISSpeed COM_ACTION message error: %w", err)
+  }
+
+  resultSpeedChan, err := bot.c3Client.Request(speedMessage)
+  if err != nil {
+    return fmt.Errorf("AXISSpeed value message request error: %w", err)
+  }
+
+  resultComActionChan, err := bot.c3Client.Request(comActionMessage)
+  if err != nil {
+    return fmt.Errorf("AXISSpeed COM_ACTION message request error: %w", err)
+  }
+
+  select {
+    case speedMessage = <-resultSpeedChan:
+      err = speedMessage.Error()
+      if err != nil {
+        return fmt.Errorf("AXISSpeed value message result error: %w", err)
+      }
+    case <-time.After(Bot_C3_Request_Timeout):
+      return fmt.Errorf("AXISSpeed value message request timeout")
+  }
+
+  select {
+    case comActionMessage = <-resultComActionChan:
+      err = comActionMessage.Error()
+      if err != nil {
+        return fmt.Errorf("AXISSpeed COM_ACTION message result error: %w", err)
+      }
+    case <-time.After(Bot_C3_Request_Timeout):
+      return fmt.Errorf("AXISSpeed COM_ACTION message request timeout")
+  }
+
+  return nil
+}
+
+
 func (bot *Bot) Move(p *Position) (bool, error) {
   bot.isMovementMux.RLock()
   if bot.isMovement == true {
@@ -221,6 +361,29 @@ func (bot *Bot) Move(p *Position) (bool, error) {
     return false, fmt.Errorf("Bot already movement")
   }
   bot.isMovementMux.RUnlock()
+
+  bot.positionMux.RLock()
+  switch p.Type() {
+    case PositionType_E6AXIS:
+      if bot.c3AXIS_ACT.Equal(p, Bot_Position_Tolerance) {
+        bot.positionMux.RUnlock()
+        bot.isMovementMux.Lock()
+        bot.isMovement = false
+        bot.isMovementMux.Unlock()
+        return false, nil
+      }
+    
+    case PositionType_E6POS:
+      if bot.c3POSITION.Equal(p, Bot_Position_Tolerance) {
+        bot.positionMux.RUnlock()
+        bot.isMovementMux.Lock()
+        bot.isMovement = false
+        bot.isMovementMux.Unlock()
+        return false, nil
+      }
+      
+  }
+  bot.positionMux.RUnlock()
 
   requestPositionVariable  := make(map[C3VariableType]*string)
   requestComActionVariable := make(map[C3VariableType]*string)
@@ -286,9 +449,9 @@ func (bot *Bot) Move(p *Position) (bool, error) {
   bot.isMovementMux.Lock()
   bot.isMovement = true
   bot.isMovementMux.Unlock()
-  log.Printf("[Bot INFO] Move bot to position %s\n", p.Value())
+  log.Printf("[Bot %s INFO] Move bot to position %s\n", bot.Name, p.Value())
   
-  var readyFlag uint8 = 0
+  var readyFlag uint16 = 0
   timeout := time.After(Bot_Move_Timeout)
   
   loop: for {
@@ -316,7 +479,7 @@ func (bot *Bot) Move(p *Position) (bool, error) {
             bot.positionMux.RUnlock()
           
           default:
-            log.Printf("[Bot WARNINT] Incorrect move position: %s\n", p.Value())
+            log.Printf("[Bot %s WARNINT] Incorrect move position: %s\n", bot.Name, p.Value())
             bot.isMovementMux.Lock()
             bot.isMovement = false
             bot.isMovementMux.Unlock()
@@ -329,7 +492,82 @@ func (bot *Bot) Move(p *Position) (bool, error) {
     }
   }
 
-  log.Printf("[Bot INFO] Move ready position %s\n", p.Value())
+  log.Printf("[Bot %s INFO] Move ready position %s\n", bot.Name, p.Value())
+  bot.isMovementMux.Lock()
+  bot.isMovement = false
+  bot.isMovementMux.Unlock()
+  return false, nil
+}
+
+func (bot *Bot) MovInternal(action uint16) (bool, error) {
+  if action != 100 && action != 200 && action != 300 && action != 400 {
+    return false, fmt.Errorf("Incorrect action & action != 100 && action != 200 && action != 300 && action != 400")
+  }
+
+  bot.isMovementMux.RLock()
+  if bot.isMovement == true {
+    bot.isMovementMux.RUnlock()
+    return false, fmt.Errorf("MovInternal %d. Bot is movement", action)
+  }
+  bot.isMovementMux.RUnlock()
+
+  requestComActionVariable := make(map[C3VariableType]*string)
+  comActionValue := fmt.Sprintf("%d", action)
+  requestComActionVariable[C3Variable_COM_ACTION] = &comActionValue
+
+  comActionMessage, err := NewC3Message(bot.nextTagId(), requestComActionVariable)
+  if err != nil {
+    return false, fmt.Errorf("MovInternal %d new COM_ACTION message error: %w", action, err)
+  }
+
+  resultComActionChan, err := bot.c3Client.Request(comActionMessage)
+  if err != nil {
+    return false, fmt.Errorf("MovInternal %d COM_ACTION message request error: %w", action, err)
+  }
+
+  select {
+    case comActionMessage = <-resultComActionChan:
+      err = comActionMessage.Error()
+      if err != nil {
+        return false, fmt.Errorf("MovInternal %d COM_ACTION message result error: %w", action, err)
+      }
+    case <-time.After(Bot_C3_Request_Timeout):
+      return false, fmt.Errorf("MovInternal %d COM_ACTION message request timeout", action)
+  }
+
+  bot.isMovementMux.Lock()
+  bot.isMovement = true
+  bot.isMovementMux.Unlock()
+  log.Printf("[Bot %s INFO] MovInternal %d start\n", bot.Name, action)
+  
+  HOME := NewPosition(PositionType_E6AXIS)
+  HOME.SetValues([14]float32{0, -90, 90, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+
+  var readyFlag uint16 = 0
+  timeout := time.After(Bot_Move_Timeout)
+
+  loop: for {
+    select {
+      case <-timeout:
+        bot.isMovementMux.Lock()
+        bot.isMovement = false
+        bot.isMovementMux.Unlock()
+        return true, fmt.Errorf("Move timeout break")
+      
+      default:
+        bot.positionMux.RLock()
+        if bot.c3AXIS_ACT.Equal(HOME, 0.0010) {
+          readyFlag++
+        }
+        bot.positionMux.RUnlock()
+
+        if readyFlag >= Bot_Position_ReadySteps {
+          break loop
+        }
+    }
+  }
+
+  log.Printf("[Bot %s INFO] MovInternal %d ready\n", bot.Name, action)
   bot.isMovementMux.Lock()
   bot.isMovement = false
   bot.isMovementMux.Unlock()
@@ -422,12 +660,12 @@ func (bot *Bot) processUpdatePosition() {
       if bot.isShutdown == true {
         return
       }
-      log.Printf("[Bot ERROR] UpdatePosition Get position error %v\n", err)
+      log.Printf("[Bot %s ERROR] UpdatePosition Get position error %v\n", bot.Name, err)
       continue
     }
 
     if err := bot.oscResponseCurrentCoords(); err != nil {
-      log.Printf("[Bot ERROR] Response current coords error %v\n", err)
+      log.Printf("[Bot %s ERROR] Response current coords error %v\n", bot.Name, err)
     }
   }
 }
@@ -489,7 +727,7 @@ func (bot *Bot) OSCPacket(oscPacket *OSCPacket) {
   select {
     case bot.oscInput <- oscPacket:
     default:
-      log.Printf("[Bot WARNING] OSC Input channel is full, discarding packet\n")
+      log.Printf("[Bot %s WARNING] OSC Input channel is full, discarding packet\n", bot.Name)
   }
 }
 
@@ -517,7 +755,7 @@ func (bot *Bot) processOSCPackets() {
 func (bot *Bot) processOSCAxis(oscPacket *OSCPacket) {
   values := oscPacket.Values()
   if len(values) != 6 {
-    log.Printf("[Bot ERROR] Incorrect OSC values length of %+v\n", values)
+    log.Printf("[Bot %s ERROR] Incorrect OSC values length of %+v\n", bot.Name, values)
     return
   }
 
@@ -527,14 +765,14 @@ func (bot *Bot) processOSCAxis(oscPacket *OSCPacket) {
       case float32:
         position.Set(i, value.(float32))
       default:
-        log.Printf("[Bot ERROR] OSC values[%d] is not of float32 value\n", i)
+        log.Printf("[Bot %s ERROR] OSC values[%d] is not of float32 value\n", bot.Name, i)
         return
     }
   }
 
   go func(position *Position) {
     if _, err := bot.Move(position); err != nil {
-      log.Printf("[Bot ERROR] OSC Position %s move error: %v\n", position.Value(), err)
+      log.Printf("[Bot %s ERROR] OSC Position %s move error: %v\n", bot.Name, position.Value(), err)
     }
   }(position)
 }
@@ -542,7 +780,7 @@ func (bot *Bot) processOSCAxis(oscPacket *OSCPacket) {
 func (bot *Bot) processOSCCoords(oscPacket *OSCPacket) {
   values := oscPacket.Values()
   if len(values) != 6 {
-    log.Printf("[Bot ERROR] Incorrect OSC values length of %+v\n", values)
+    log.Printf("[Bot %s ERROR] Incorrect OSC values length of %+v\n", bot.Name, values)
     return
   }
 
@@ -552,14 +790,14 @@ func (bot *Bot) processOSCCoords(oscPacket *OSCPacket) {
       case float32:
         position.Set(i, value.(float32))
       default:
-        log.Printf("[Bot ERROR] OSC values[%d] is not of float32 value\n", i)
+        log.Printf("[Bot %s ERROR] OSC values[%d] is not of float32 value\n", bot.Name, i)
         return
     }
   }
 
   go func(position *Position) {
     if _, err := bot.Move(position); err != nil {
-      log.Printf("[Bot ERROR] OSC Position %s move error: %v\n", position.Value(), err)
+      log.Printf("[Bot %s ERROR] OSC Position %s move error: %v\n", bot.Name, position.Value(), err)
     }
   }(position)
 }
@@ -579,11 +817,35 @@ func (bot *Bot) GetMoveGroup(id uint16) *MoveGroup {
 }
 
 func (bot *Bot) MoveRound(moveGroup *MoveGroup) (bool, error) {
+  if moveGroup.Id == 100 || moveGroup.Id == 200 || moveGroup.Id == 300 || moveGroup.Id == 400 {
+    if isBreak, err := bot.MovInternal(moveGroup.Id); err != nil {
+       return isBreak, fmt.Errorf("MoveGroup %d MoveInternal error: %w", moveGroup.Id, err)
+    }
+
+    bot.currentMoveGroupIdMux.Lock()
+    bot.currentMoveGroupId =  moveGroup.Id
+    bot.currentMoveGroupIdMux.Unlock()
+    return false, nil
+  }
+
+  bot.currentMoveGroupIdMux.RLock()
+  if err := BotETest(bot.currentMoveGroupId, moveGroup.Id); err != nil {
+    bot.currentMoveGroupIdMux.RUnlock()
+    return false, fmt.Errorf("MoveGroup %d Error: %w", moveGroup.Id, err)
+  }
+  bot.currentMoveGroupIdMux.RUnlock()
+  
   for _, position := range moveGroup.Positions {
     if isBreak, err := bot.Move(position); err != nil {
       return isBreak, fmt.Errorf("MoveGroup %d Position %s move error: %w", moveGroup.Id, position.Value(), err)
     }
+    time.Sleep(250 * time.Millisecond)
+
   }
+
+  bot.currentMoveGroupIdMux.Lock()
+  bot.currentMoveGroupId =  moveGroup.Id
+  bot.currentMoveGroupIdMux.Unlock()
   return false, nil
 }
 
@@ -591,19 +853,19 @@ func (bot *Bot) processMoveGroup() {
   defer bot.wg.Done()
   
   for moveGroup := range bot.moveInput {
-    log.Printf("[Service INFO] Process MoveGroup %d start\n", moveGroup.Id)
+    log.Printf("[Bot %s INFO] Process MoveGroup %d start\n", bot.Name, moveGroup.Id)
 
     if bot.isMovement == true {
-      log.Printf("[Service ERROR] Process MoveGroup %d skip, bot is Movement\n", moveGroup.Id)
+      log.Printf("[Bot %s ERROR] Process MoveGroup %d skip, bot is Movement\n", bot.Name, moveGroup.Id)
       continue
     }
 
     if isBreak, err := bot.MoveRound(moveGroup); err != nil {
-      log.Printf("[Service ERROR] Process MoveGroup %d error: %v with break %v\n", moveGroup.Id, err, isBreak)
+      log.Printf("[Bot %s ERROR] Process MoveGroup %d error: %v with break %v\n", bot.Name, moveGroup.Id, err, isBreak)
       continue
     }
 
-    log.Printf("[Service INFO] Process MoveGroup %d sucessful\n", moveGroup.Id)
+    log.Printf("[Bot %s INFO] Process MoveGroup %d sucessful\n", bot.Name, moveGroup.Id)
   }
 }
 
@@ -619,20 +881,34 @@ func (bot *Bot) RunMoveGroup(id uint16) error {
 
 func (bot *Bot) processOSCPosition(oscPacket *OSCPacket) {
   values := oscPacket.Values()
-  if len(values) != 2 {
-    log.Printf("[Bot ERROR] Incorrect OSC Position values length of %+v\n", values)
+  if len(values) != 3 {
+    log.Printf("[Bot %s ERROR] Incorrect OSC Position values length of %+v\n", bot.Name, values)
     return
   }
-  
+
   var id uint16 = uint16(values[0].(int32))
+  var _ uint16 = uint16(values[1].(int32)) // Speed
   var index int32 = values[1].(int32)
 
-  moveGroup := bot.GetMoveGroup(id)
-  if moveGroup == nil {
-    log.Printf("[Bot ERROR] OSC MoveGroup %d in not found\n", id)
+  bot.isMovementMux.RLock()
+  if bot.isMovement == true {
+    bot.isMovementMux.RUnlock()
+    log.Printf("[Bot %s ERROR] OSC MoveGroup error: Arready movement\n", bot.Name)
     go func() {
       if err := bot.oscResponsePosition(OSCOutputStatus_Error, index, id); err != nil {
-        log.Printf("[Bot ERROR] OSC Response error %v\n", err)
+        log.Printf("[Bot %s ERROR] OSC Response error %v\n", bot.Name, err)
+      }
+    }()
+    return
+  }
+  bot.isMovementMux.RUnlock()
+  
+  moveGroup := bot.GetMoveGroup(id)
+  if moveGroup == nil {
+    log.Printf("[Bot %s ERROR] OSC MoveGroup %d in not found\n", bot.Name, id)
+    go func() {
+      if err := bot.oscResponsePosition(OSCOutputStatus_Error, index, id); err != nil {
+        log.Printf("[Bot %s ERROR] OSC Response error %v\n", bot.Name, err)
       }
     }()
     return
@@ -640,18 +916,19 @@ func (bot *Bot) processOSCPosition(oscPacket *OSCPacket) {
 
   go func(index int32, moveGroup *MoveGroup) {
     if isBreak, err := bot.MoveRound(moveGroup); err != nil {
-      log.Printf("[Bot ERROR] OSC Process position error: %v\n", err)
+      log.Printf("[Bot %s ERROR] OSC Process position error: %v\n", bot.Name, err)
       status := OSCOutputStatus_Error
       if isBreak == true {
         status = OSCOutputStatus_Break
       }
       if err := bot.oscResponsePosition(status, index, moveGroup.Id); err != nil {
-        log.Printf("[Bot ERROR] OSC error move response error %v\n", err)
+        log.Printf("[Bot %s ERROR] OSC error move response error %v\n", bot.Name, err)
       }
+      return
     }
 
     if err := bot.oscResponsePosition(OSCOutputStatus_OK, index, moveGroup.Id); err != nil {
-      log.Printf("[Bot ERROR] OSC sucess move response error %v\n", err)
+      log.Printf("[Bot %s ERROR] OSC sucess move response error %v\n", bot.Name, err)
     }
   }(index, moveGroup)
 }

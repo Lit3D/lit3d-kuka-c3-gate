@@ -97,6 +97,12 @@ func (p *Position) Set(i int, value float32) error {
   return nil
 }
 
+func (p *Position) SetValues(values [14]float32) {
+  for i := 0; i < 14; i++ {
+    p.values[i] = values[i]
+  }
+}
+
 func (p *Position) X(value *float32) float32 {
   if value != nil {
     p.values[0] = *value

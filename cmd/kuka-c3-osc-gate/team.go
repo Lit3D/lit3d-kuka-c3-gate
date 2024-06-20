@@ -177,13 +177,14 @@ func (team *Team) processOSCPackets() {
 
 func (team *Team) processOSCPosition(oscPacket *OSCPacket) {
   values := oscPacket.Values()
-  if len(values) != 2 {
+  if len(values) != 3 {
     log.Printf("[Bot ERROR] Incorrect OSC Position values length of %+v\n", values)
     return
   }
 
   var id uint16 = uint16(values[0].(int32))
-  var index int32 = values[1].(int32)
+  var _ uint16 = uint16(values[1].(int32)) // Speed
+  var index int32 = values[2].(int32)
 
   go func(index int32, id uint16) {
 
@@ -226,8 +227,11 @@ func (team *Team) processOSCPosition(oscPacket *OSCPacket) {
         if err := team.oscResponsePosition(status, index, id); err != nil {
           log.Printf("[BotTeam ERROR] OSC error move response error %v\n", err)
         }
+        return
       }
     }
+
+
 
     if err := team.oscResponsePosition(OSCOutputStatus_OK, index, id); err != nil {
       log.Printf("[Bot ERROR] OSC sucess move response error %v\n", err)
